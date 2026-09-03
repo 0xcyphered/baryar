@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 const pkg = require('../package.json');
 const authRoutes = require('./routes/auth');
 const cargoRoutes = require('./routes/cargo');
+const driverRoutes = require('./routes/driver');
 
 function createApp() {
   const app = express();
@@ -39,6 +40,8 @@ function createApp() {
   app.use('/api/auth', authRoutes);
 
   app.use('/api/cargo', cargoRoutes);
+
+  app.use('/api/driver', driverRoutes);
 
   app.use('/api', (req, res) => {
     res.status(404).json({ error: 'not_found' });
