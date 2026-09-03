@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   I18nManager,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -35,6 +36,13 @@ import ShipmentListScreen from './src/screens/ShipmentListScreen';
 import ShipmentDetailScreen from './src/screens/ShipmentDetailScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import LocationPickerScreen from './src/screens/LocationPickerScreen';
+import DriverOnboardingScreen from './src/screens/DriverOnboardingScreen';
+import DriverVehiclesScreen from './src/screens/DriverVehiclesScreen';
+import DriverDocumentsScreen from './src/screens/DriverDocumentsScreen';
+import MatchingCargoScreen from './src/screens/MatchingCargoScreen';
+import SubmitOfferScreen from './src/screens/SubmitOfferScreen';
+import DriverOffersScreen from './src/screens/DriverOffersScreen';
+import DriverShipmentDetailScreen from './src/screens/DriverShipmentDetailScreen';
 
 import type { MapMode, SegmentDistance, Waypoint } from './src/types';
 import {
@@ -68,6 +76,7 @@ type AuthStackParamList = {
 type MainTabParamList = {
   MapTab: undefined;
   CargoTab: undefined;
+  DriverTab: undefined;
   ShipmentsTab: undefined;
   NotificationsTab: undefined;
 };
@@ -84,6 +93,17 @@ type CargoStackParamList = {
 type ShipmentStackParamList = {
   ShipmentList: undefined;
   ShipmentDetail: { shipmentId: string };
+};
+
+type DriverStackParamList = {
+  DriverOnboarding: undefined;
+  DriverDashboard: undefined;
+  DriverVehicles: undefined;
+  DriverDocuments: undefined;
+  MatchingCargo: undefined;
+  SubmitOffer: { cargoId: string; cargoTitle: string };
+  DriverOffers: undefined;
+  DriverShipmentDetail: { shipmentId: string };
 };
 
 type RootStackParamList = {
@@ -126,6 +146,105 @@ function ShipmentStackScreen() {
   );
 }
 
+// --- Driver dashboard + stack ---
+
+function DriverDashboardScreen({ onNavigate }: { onNavigate: (screen: string, params?: any) => void }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }}
+      contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24, paddingHorizontal: 16 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <Text style={{ fontSize: 17, fontFamily: 'Vazirmatn_700Bold', color: COLORS.textDark }}>رانندگی</Text>
+      </View>
+      <Pressable style={dashStyles.card} onPress={() => onNavigate('DriverOnboarding')}>
+        <Ionicons name="person-outline" size={20} color={COLORS.blue} />
+        <Text style={dashStyles.cardText}>ویرایش پروفایل راننده</Text>
+        <Ionicons name="chevron-back" size={18} color={COLORS.gray} />
+      </Pressable>
+      <Pressable style={dashStyles.card} onPress={() => onNavigate('MatchingCargo')}>
+        <Ionicons name="search-outline" size={20} color={COLORS.green} />
+        <Text style={dashStyles.cardText}>فهرست بار</Text>
+        <Ionicons name="chevron-back" size={18} color={COLORS.gray} />
+      </Pressable>
+      <Pressable style={dashStyles.card} onPress={() => onNavigate('DriverOffers')}>
+        <Ionicons name="pricetag-outline" size={20} color="#f59e0b" />
+        <Text style={dashStyles.cardText}>پیشنهادهای من</Text>
+        <Ionicons name="chevron-back" size={18} color={COLORS.gray} />
+      </Pressable>
+      <Pressable style={dashStyles.card} onPress={() => onNavigate('DriverVehicles')}>
+        <Ionicons name="car-outline" size={20} color={COLORS.blue} />
+        <Text style={dashStyles.cardText}>وسایل نقلیه</Text>
+        <Ionicons name="chevron-back" size={18} color={COLORS.gray} />
+      </Pressable>
+      <Pressable style={dashStyles.card} onPress={() => onNavigate('DriverDocuments')}>
+        <Ionicons name="document-text-outline" size={20} color={COLORS.red} />
+        <Text style={dashStyles.cardText}>اسناد</Text>
+        <Ionicons name="chevron-back" size={18} color={COLORS.gray} />
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+const dashStyles = StyleSheet.create({
+  card: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: COLORS.white, borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 14, marginBottom: 10,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06, shadowRadius: 3, elevation: 2,
+  },
+  cardText: { flex: 1, fontSize: 14, fontFamily: 'Vazirmatn_500Medium', color: COLORS.textDark },
+});
+
+function DriverStackScreen() {
+  const S = createNativeStackNavigator<DriverStackParamList>();
+  const [isDriver, setIsDriver] = useState<boolean | null>(null);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user) setIsDriver(user.roles.includes('driver'));
+  }, [user]);
+
+  if (isDriver === null) {
+    return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.bg }}>
+      <ActivityIndicator size="large" color={COLORS.blue} />
+    </View>;
+  }
+
+  return (
+    <S.Navigator screenOptions={{ headerShown: false }}>
+      {!isDriver ? (
+        <S.Screen name="DriverOnboarding">
+          {() => (
+            <DriverOnboardingScreen onDone={() => setIsDriver(true)} />
+          )}
+        </S.Screen>
+      ) : (
+        <>
+          <S.Screen name="DriverDashboard">
+            {({ navigation }) => (
+              <DriverDashboardScreen onNavigate={(screen: string, params?: any) => navigation.navigate(screen as any, params)} />
+            )}
+          </S.Screen>
+          <S.Screen name="DriverOnboarding">
+            {() => (
+              <DriverOnboardingScreen
+                onDone={() => setIsDriver(true)}
+              />
+            )}
+          </S.Screen>
+          <S.Screen name="DriverVehicles" component={DriverVehiclesScreen} />
+          <S.Screen name="DriverDocuments" component={DriverDocumentsScreen} />
+          <S.Screen name="MatchingCargo" component={MatchingCargoScreen} />
+          <S.Screen name="SubmitOffer" component={SubmitOfferScreen} />
+          <S.Screen name="DriverOffers" component={DriverOffersScreen} />
+          <S.Screen name="DriverShipmentDetail" component={DriverShipmentDetailScreen} />
+        </>
+      )}
+    </S.Navigator>
+  );
+}
+
 // --- Main tab navigator ---
 
 function MainTabs() {
@@ -154,6 +273,14 @@ function MainTabs() {
         options={{
           tabBarLabel: 'بارها',
           tabBarIcon: ({ color, size }) => <Ionicons name="cube-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="DriverTab"
+        component={DriverStackScreen}
+        options={{
+          tabBarLabel: 'رانندگی',
+          tabBarIcon: ({ color, size }) => <Ionicons name="car-sport-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen

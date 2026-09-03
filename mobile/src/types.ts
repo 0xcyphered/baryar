@@ -119,3 +119,48 @@ export interface AppNotification {
   createdAt: string;
   updatedAt: string;
 }
+
+/** Driver profile from the 016 backend model. */
+export interface DriverProfile {
+  id: string;
+  userId: string;
+  licenseNumber: string;
+  professionalCardNumber: string;
+  verificationStatus: 'pending' | 'approved' | 'rejected';
+  verifiedAt: string | null;
+  rejectionReason: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Vehicle from the 016 backend model. */
+export interface Vehicle {
+  id: string;
+  driverProfileId: string;
+  ownerUserId: string;
+  vehicleType: 'truck' | 'trailer' | 'van' | 'reefer' | 'tanker' | 'other';
+  plate: string;
+  capacityWeightKg: number;
+  capacityVolumeM3: number;
+  year: number | null;
+  status: 'active' | 'inactive';
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Document stub from the 016 backend model. */
+export interface DriverDocument {
+  id: string;
+  userId: string;
+  vehicleId: string | null;
+  kind: 'driving_license' | 'vehicle_registration' | 'safety_card' | 'national_id' | 'professional_card' | 'other';
+  storageKey: string;
+  originalName: string;
+  mimeType: string;
+  verificationStatus: 'pending' | 'approved' | 'rejected';
+  reviewedAt: string | null;
+  reviewerUserId: string | null;
+  rejectionReason: string;
+  createdAt: string;
+  updatedAt: string;
+}

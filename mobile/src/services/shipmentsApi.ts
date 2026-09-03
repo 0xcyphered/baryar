@@ -23,3 +23,25 @@ export async function listShipmentEvents(id: string): Promise<ShipmentEvent[]> {
   const res = await apiFetch<EventListResponse>(`/api/shipments/${id}/events`);
   return res.events;
 }
+
+interface EventResponse { event: ShipmentEvent; }
+
+export async function transitionShipment(id: string, toStatus: string): Promise<Shipment> {
+  const res = await apiFetch<ShipmentSingleResponse>(`/api/shipments/${id}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status: toStatus }),
+  });
+  return res.shipment;
+}
+
+export async function addShipmentEvent(id: string, body: {
+  eventType: string;
+  note?: string;
+  location?: { type: 'Point'; coordinates: [number, number] };
+}): Promise<ShipmentEvent> {
+  const res = await apiFetch<EventResponse>(`/api/shipments/${id}/events`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return res.event;
+}
