@@ -8,6 +8,8 @@ const cargoRoutes = require('./routes/cargo');
 const driverRoutes = require('./routes/driver');
 const matchingRoutes = require('./routes/matching');
 const offerRoutes = require('./routes/offers');
+const shipmentRoutes = require('./routes/shipments');
+const notificationRoutes = require('./routes/notifications');
 
 function createApp() {
   const app = express();
@@ -48,6 +50,10 @@ function createApp() {
   app.use('/api/matching', matchingRoutes);
 
   app.use('/api/offers', offerRoutes);
+
+  app.use('/api/shipments', shipmentRoutes);
+
+  app.use('/api/notifications', notificationRoutes);
 
   app.use('/api', (req, res) => {
     res.status(404).json({ error: 'not_found' });

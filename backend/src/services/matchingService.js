@@ -1,6 +1,7 @@
 const Cargo = require("../models/Cargo");
 const Offer = require("../models/Offer");
 const Vehicle = require("../models/Vehicle");
+const shipmentService = require("./shipmentService");
 
 const MAX_LIST = 100;
 // vehicleId/cargoId come from the route/params, never the body.
@@ -175,6 +176,8 @@ async function listCargoOffers({ userId, cargoId }) {
 // cannot double-award: the cargo can only leave 'open' once, and the offer
 // can only leave 'pending' once (with a best-effort cargo revert if the
 // offer flip loses the race).
+// Plan 018 adds the Shipment creation + notifications tail via
+// shipmentService.createForAward.
 async function acceptOffer({ userId, offerId }) {
   assertId(offerId, "invalid_offer_id");
   const offer = await Offer.findById(offerId);
@@ -205,6 +208,16 @@ async function acceptOffer({ userId, offerId }) {
     { cargoId: offer.cargoId, _id: { $ne: offer._id }, status: "pending" },
     { status: "rejected" }
   );
+
+  // Plan 018: awarding a cargo creates the Shipment. Shipment has a unique
+  // index on cargoId, so a partially-completed award retry lands in the
+  // idempotency catch inside createForAward instead of double-notifying.
+  // createForAward never throws for notification problems (they are
+  // swallowed inside notificationService), but it CAN throw for real
+  // Shipment-validation problems. Validation here is guaranteed by
+  // construction (accepted offer + matched cargo from this transaction), so
+  // any throw is a server bug — surface it as 500 like any other failure.
+  await shipmentService.createForAward({ cargo, offer });
 
   const freshOffer = await Offer.findById(offer._id);
   const freshCargo = await Cargo.findById(cargo._id);
