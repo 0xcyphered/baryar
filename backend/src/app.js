@@ -6,6 +6,8 @@ const pkg = require('../package.json');
 const authRoutes = require('./routes/auth');
 const cargoRoutes = require('./routes/cargo');
 const driverRoutes = require('./routes/driver');
+const matchingRoutes = require('./routes/matching');
+const offerRoutes = require('./routes/offers');
 
 function createApp() {
   const app = express();
@@ -42,6 +44,10 @@ function createApp() {
   app.use('/api/cargo', cargoRoutes);
 
   app.use('/api/driver', driverRoutes);
+
+  app.use('/api/matching', matchingRoutes);
+
+  app.use('/api/offers', offerRoutes);
 
   app.use('/api', (req, res) => {
     res.status(404).json({ error: 'not_found' });
