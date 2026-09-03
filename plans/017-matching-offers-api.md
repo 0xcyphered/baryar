@@ -283,10 +283,12 @@ forbidden, not_found, invalid_status, offer_exists, invalid_offer_id`),
   driver sees the same cargo shape owners get.
 
 **Verify**: `node --check backend/src/routes/matching.js` → exit 0;
-`grep -c "router\." backend/src/routes/matching.js` → `4` (one `router.use`
-auth line + one `router.use(requireDriver)` line + 1 route + module.exports
-line uses `module.exports`, not `router.` — so the count is exactly the two
-`router.use` + one `router.get` = 3 `router.` lines; expect `3`).
+`grep -c "router\." backend/src/routes/matching.js` → `2` (exactly one
+`router.use(auth, requireDriver);` line + one `router.get('/cargo', ...)`
+line; `function requireDriver` and `module.exports = router;` contain no
+`router.` substring, so the count is mechanically 2 — if your file has a
+comment containing `router.`, remove the token from the comment rather than
+adjusting the expected count).
 
 ### Step 3: Create `backend/src/routes/offers.js`
 
