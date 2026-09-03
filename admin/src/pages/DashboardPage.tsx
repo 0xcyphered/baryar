@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { apiGet } from '../lib/api';
-import { Users, Truck, Package, FileText, AlertCircle } from 'lucide-react';
+import { Users, Truck, Package, AlertCircle } from 'lucide-react';
 
 interface Overview {
   users: { total: number; drivers: number; cargoOwners: number; admins: number; blocked: number };

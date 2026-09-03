@@ -316,6 +316,53 @@ async function verifyDocument({ id, decision, reason, reviewerUserId }) {
   return document;
 }
 
+// --- Shipments ---
+
+async function listShipmentsAdmin({ status } = {}) {
+  const query = {};
+  if (status !== undefined) {
+    if (!Shipment.STATUSES.includes(status)) fail('validation_error');
+    query.status = status;
+  }
+  const shipments = await Shipment.find(query).sort({ createdAt: -1 }).limit(MAX_LIST);
+  if (shipments.length === 0) return { shipments: [], count: 0 };
+
+  const cargoIds = [...new Set(shipments.map((s) => s.cargoId))];
+  const userIds = [...new Set(
+    shipments.flatMap((s) => [s.ownerUserId.toString(), s.driverUserId.toString()])
+  )];
+
+  const [users, cargos] = await Promise.all([
+    User.find({ _id: { $in: userIds } }).select('phone name').lean(),
+    Cargo.find({ _id: { $in: cargoIds } }).select('title transportMode').lean(),
+  ]);
+
+  const userMap = {};
+  for (const u of users) userMap[u._id.toString()] = u;
+  const cargoMap = {};
+  for (const c of cargos) cargoMap[c._id.toString()] = c;
+
+  const enriched = shipments.map((s) => {
+    const owner = userMap[s.ownerUserId.toString()] || {};
+    const driver = userMap[s.driverUserId.toString()] || {};
+    const cargo = cargoMap[s.cargoId.toString()] || {};
+    return {
+      id: s._id.toString(),
+      cargoId: s.cargoId.toString(),
+      cargoTitle: cargo.title || '',
+      cargoMode: cargo.transportMode || '',
+      ownerName: owner.name || owner.phone || '',
+      driverName: driver.name || driver.phone || '',
+      status: s.status,
+      pickupAt: s.pickupAt,
+      deliveredAt: s.deliveredAt,
+      createdAt: s.createdAt,
+    };
+  });
+
+  return { shipments: enriched, count: enriched.length };
+}
+
 // --- Admin bootstrap ---
 
 async function ensureAdminBootstrap() {
@@ -371,5 +418,6 @@ module.exports = {
   overview,
   listDocuments,
   verifyDocument,
+  listShipmentsAdmin,
   ensureAdminBootstrap,
 };

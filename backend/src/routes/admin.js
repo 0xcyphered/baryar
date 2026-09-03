@@ -198,6 +198,19 @@ router.post('/documents/:id/verify', async (req, res) => {
   }
 });
 
+// --- Shipments ---
+
+router.get('/shipments', async (req, res) => {
+  try {
+    const result = await adminService.listShipmentsAdmin({
+      status: req.query.status,
+    });
+    return res.status(200).json(result);
+  } catch (err) {
+    return sendAdminError(res, err);
+  }
+});
+
 // --- Settings ---
 
 router.get('/settings', async (req, res) => {

@@ -4,6 +4,10 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
+import UsersPage from './pages/UsersPage';
+import DriversPage from './pages/DriversPage';
+import CargoPage from './pages/CargoPage';
+import TripsPage from './pages/TripsPage';
 
 function Placeholder({ title }: { title: string }) {
   return (
@@ -28,9 +32,10 @@ export default function App() {
             }
           >
             <Route index element={<DashboardPage />} />
-            <Route path="users" element={<Placeholder title="کاربران" />} />
-            <Route path="drivers" element={<Placeholder title="رانندگان" />} />
-            <Route path="cargo" element={<Placeholder title="بار" />} />
+            <Route path="users" element={<UsersPage />} />
+            <Route path="drivers" element={<DriversPage />} />
+            <Route path="cargo" element={<CargoPage />} />
+            <Route path="trips" element={<TripsPage />} />
             <Route path="documents" element={<Placeholder title="اسناد" />} />
             <Route path="settings" element={<Placeholder title="تنظیمات" />} />
           </Route>

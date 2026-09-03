@@ -6,6 +6,7 @@ import {
   Package,
   FileText,
   Settings,
+  Route,
   LogOut,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
@@ -15,6 +16,7 @@ const NAV_ITEMS = [
   { to: '/users', icon: Users, label: 'کاربران' },
   { to: '/drivers', icon: Truck, label: 'رانندگان' },
   { to: '/cargo', icon: Package, label: 'بار' },
+  { to: '/trips', icon: Route, label: 'سفرها' },
   { to: '/documents', icon: FileText, label: 'اسناد' },
   { to: '/settings', icon: Settings, label: 'تنظیمات' },
 ];
