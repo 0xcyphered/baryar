@@ -6,6 +6,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/vazirmatn';
 import {
+  ActivityIndicator,
   I18nManager,
   Pressable,
   StyleSheet,
@@ -18,6 +19,12 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { Ionicons } from '@expo/vector-icons';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { hapticLight, hapticMedium, hapticWarning } from './src/utils/haptics';
+import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
+import OtpRequestScreen from './src/screens/OtpRequestScreen';
+import OtpVerifyScreen from './src/screens/OtpVerifyScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
 
 import type { MapMode, SegmentDistance, Waypoint } from './src/types';
 import {
@@ -44,6 +51,64 @@ I18nManager.forceRTL(true);
 // One shared counter for waypoints added by map taps AND search selections.
 let waypointCounter = 0;
 
+// --- Navigation param lists ---
+type AuthStackParamList = {
+  OtpRequest: undefined;
+  OtpVerify: { phone: string };
+};
+
+type MainStackParamList = {
+  Map: undefined;
+  Profile: undefined;
+};
+
+function AppNavigator() {
+  const { user, isLoading } = useAuth();
+  const AuthStack = createNativeStackNavigator<AuthStackParamList>();
+  const MainStack = createNativeStackNavigator<MainStackParamList>();
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.bg }}>
+        <ActivityIndicator size="large" color={COLORS.blue} />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return (
+      <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+        <AuthStack.Screen name="OtpRequest">
+          {({ navigation }) => (
+            <OtpRequestScreen
+              onSent={(phone) => navigation.navigate('OtpVerify', { phone })}
+            />
+          )}
+        </AuthStack.Screen>
+        <AuthStack.Screen name="OtpVerify">
+          {({ navigation, route }) => (
+            <OtpVerifyScreen
+              phone={route.params.phone}
+              onBack={() => navigation.goBack()}
+            />
+          )}
+        </AuthStack.Screen>
+      </AuthStack.Navigator>
+    );
+  }
+
+  return (
+    <MainStack.Navigator screenOptions={{ headerShown: false }}>
+      <MainStack.Screen name="Map" component={AppRoot} />
+      <MainStack.Screen name="Profile">
+        {({ navigation }) => (
+          <ProfileScreen onBack={() => navigation.goBack()} />
+        )}
+      </MainStack.Screen>
+    </MainStack.Navigator>
+  );
+}
+
 function AppRoot() {
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [segments, setSegments] = useState<SegmentDistance[]>([]);
@@ -53,6 +118,7 @@ function AppRoot() {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapCanvasHandle | null>(null);
   const sheetRef = useRef<BottomSheet | null>(null);
+  const navigation = useNavigation();
 
   // Google Maps layout: search bar at top, FABs on right side, bottom sheet at bottom.
   const FABS_BOTTOM = insets.bottom + 24;
@@ -226,6 +292,9 @@ function AppRoot() {
         <Pressable style={styles.fab} onPress={() => { hapticLight(); void handleGpsPress(); }}>
           <Ionicons name="navigate" size={22} color={COLORS.blue} />
         </Pressable>
+        <Pressable style={styles.fab} onPress={() => { hapticLight(); navigation.navigate('Profile' as never); }}>
+          <Ionicons name="person" size={22} color={COLORS.textDark} />
+        </Pressable>
       </View>
 
       {/* 6. Waypoints bottom sheet (replaces the entire sidebar) */}
@@ -258,7 +327,11 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AppRoot />
+        <NavigationContainer>
+          <AuthProvider>
+            <AppNavigator />
+          </AuthProvider>
+        </NavigationContainer>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

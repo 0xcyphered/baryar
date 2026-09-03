@@ -27,3 +27,13 @@ export interface SegmentDistance {
 }
 
 export type MapMode = 'explore' | 'measure';
+
+export interface UserProfile {
+  id: string;
+  phone: string;
+  name: string;
+  email: string;
+  roles: string[];
+  status: string;
+  phoneVerifiedAt: string | null;
+}

@@ -7,6 +7,8 @@
     "@expo/vector-icons": "^15.0.2",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@maplibre/maplibre-react-native": "^11.3.8",
+    "@react-navigation/native": "^7.3.18",
+    "@react-navigation/native-stack": "^7.18.10",
     "@turf/distance": "^7.4.0",
     "@turf/helpers": "^7.4.0",
     "expo": "~57.0.18",
@@ -14,6 +16,7 @@
     "expo-font": "~57.0.2",
     "expo-haptics": "~57.0.2",
     "expo-location": "~57.0.14",
+    "expo-secure-store": "^57.0.3",
     "expo-status-bar": "~57.0.1",
     "maplibre-gl": "^6.6.0",
     "react": "19.2.3",
@@ -22,6 +25,7 @@
     "react-native-gesture-handler": "~2.32.0",
     "react-native-reanimated": "^4.5.1",
     "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "^4.27.0",
     "react-native-web": "^0.21.2"
   },
   "devDependencies": {

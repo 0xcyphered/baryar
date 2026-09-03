@@ -1,0 +1,71 @@
+import * as SecureStore from 'expo-secure-store';
+import { API_BASE } from '../config';
+
+const TOKEN_KEY = 'auth_token';
+
+export interface ApiError {
+  error: string;
+  message?: string;
+}
+
+/**
+ * Low-level fetch wrapper for the Baryar API.
+ * Automatically prepends API_BASE, sets JSON headers,
+ * and injects the stored JWT Bearer token.
+ *
+ * On 401, clears the stored token (the caller/AuthContext
+ * will react to the missing token and show auth screens).
+ */
+export async function apiFetch<T = unknown>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const token = await SecureStore.getItemAsync(TOKEN_KEY);
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      await SecureStore.deleteItemAsync(TOKEN_KEY);
+    }
+    const err: ApiError = body && body.error
+      ? body
+      : { error: 'unknown_error' };
+    throw err;
+  }
+
+  return body as T;
+}
+
+/**
+ * Set the auth token in secure storage.
+ */
+export async function setAuthToken(token: string): Promise<void> {
+  await SecureStore.setItemAsync(TOKEN_KEY, token);
+}
+
+/**
+ * Clear the auth token from secure storage.
+ */
+export async function clearAuthToken(): Promise<void> {
+  await SecureStore.deleteItemAsync(TOKEN_KEY);
+}
+
+/**
+ * Read the raw token (or null).
+ */
+export async function getAuthToken(): Promise<string | null> {
+  return SecureStore.getItemAsync(TOKEN_KEY);
+}
