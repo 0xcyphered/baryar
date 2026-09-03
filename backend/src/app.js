@@ -10,6 +10,7 @@ const matchingRoutes = require('./routes/matching');
 const offerRoutes = require('./routes/offers');
 const shipmentRoutes = require('./routes/shipments');
 const notificationRoutes = require('./routes/notifications');
+const adminRoutes = require('./routes/admin');
 
 function createApp() {
   const app = express();
@@ -54,6 +55,7 @@ function createApp() {
   app.use('/api/shipments', shipmentRoutes);
 
   app.use('/api/notifications', notificationRoutes);
+  app.use('/api/admin', adminRoutes);
 
   app.use('/api', (req, res) => {
     res.status(404).json({ error: 'not_found' });

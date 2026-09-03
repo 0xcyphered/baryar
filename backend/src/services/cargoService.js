@@ -112,6 +112,7 @@ async function cancelCargo({ ownerUserId, id }) {
 }
 
 module.exports = {
+  EDITABLE_FIELDS,
   publicCargo,
   createCargo,
   listCargo,
