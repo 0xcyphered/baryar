@@ -8,15 +8,8 @@ import UsersPage from './pages/UsersPage';
 import DriversPage from './pages/DriversPage';
 import CargoPage from './pages/CargoPage';
 import TripsPage from './pages/TripsPage';
-
-function Placeholder({ title }: { title: string }) {
-  return (
-    <div className="space-y-4">
-      <h2 className="text-lg font-bold text-gray-800">{title}</h2>
-      <p className="text-sm text-gray-500">این بخش در پلن‌های بعدی اضافه خواهد شد.</p>
-    </div>
-  );
-}
+import DocumentsPage from './pages/DocumentsPage';
+import SettingsPage from './pages/SettingsPage';
 
 export default function App() {
   return (
@@ -36,8 +29,8 @@ export default function App() {
             <Route path="drivers" element={<DriversPage />} />
             <Route path="cargo" element={<CargoPage />} />
             <Route path="trips" element={<TripsPage />} />
-            <Route path="documents" element={<Placeholder title="اسناد" />} />
-            <Route path="settings" element={<Placeholder title="تنظیمات" />} />
+            <Route path="documents" element={<DocumentsPage />} />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
