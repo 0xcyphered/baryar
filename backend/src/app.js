@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const mongoose = require('mongoose');
 const pkg = require('../package.json');
+const authRoutes = require('./routes/auth');
 
 function createApp() {
   const app = express();
@@ -33,6 +34,8 @@ function createApp() {
       checks: { mongo },
     });
   });
+
+  app.use('/api/auth', authRoutes);
 
   app.use('/api', (req, res) => {
     res.status(404).json({ error: 'not_found' });

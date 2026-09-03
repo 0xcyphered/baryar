@@ -10,10 +10,13 @@
     "test": "jest --runInBand --forceExit"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.7.0",
     "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.5.0"
   },
   "devDependencies": {
@@ -24,7 +27,9 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "testMatch": ["**/test/__tests__/**/*.test.js"],
+    "testMatch": [
+      "**/test/__tests__/**/*.test.js"
+    ],
     "globalSetup": "./test/globalSetup.js",
     "globalTeardown": "./test/globalTeardown.js",
     "testTimeout": 30000
