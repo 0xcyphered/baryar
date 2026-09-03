@@ -18,19 +18,27 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type BottomSheet from '@gorhom/bottom-sheet';
-import { hapticLight, hapticMedium, hapticWarning } from './src/utils/haptics';
+import { hapticLight, hapticMedium } from './src/utils/haptics';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import OtpRequestScreen from './src/screens/OtpRequestScreen';
 import OtpVerifyScreen from './src/screens/OtpVerifyScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import CargoListScreen from './src/screens/CargoListScreen';
+import CreateCargoScreen from './src/screens/CreateCargoScreen';
+import EditCargoScreen from './src/screens/EditCargoScreen';
+import CargoDetailScreen from './src/screens/CargoDetailScreen';
+import OffersScreen from './src/screens/OffersScreen';
+import ShipmentListScreen from './src/screens/ShipmentListScreen';
+import ShipmentDetailScreen from './src/screens/ShipmentDetailScreen';
+import NotificationsScreen from './src/screens/NotificationsScreen';
+import LocationPickerScreen from './src/screens/LocationPickerScreen';
 
 import type { MapMode, SegmentDistance, Waypoint } from './src/types';
 import {
   computeSegments,
-  totalRoutedDistance,
-  totalStraightDistance,
 } from './src/utils/distance';
 import { formatDistance, toPersianNumber } from './src/utils/persian';
 import {
@@ -57,15 +65,123 @@ type AuthStackParamList = {
   OtpVerify: { phone: string };
 };
 
-type MainStackParamList = {
-  Map: undefined;
+type MainTabParamList = {
+  MapTab: undefined;
+  CargoTab: undefined;
+  ShipmentsTab: undefined;
+  NotificationsTab: undefined;
+};
+
+type CargoStackParamList = {
+  CargoList: undefined;
+  CreateCargo: undefined;
+  EditCargo: { cargoId: string };
+  CargoDetail: { cargoId: string };
+  Offers: { cargoId: string; cargoTitle: string };
+  LocationPicker: { mode: 'origin' | 'destination' };
+};
+
+type ShipmentStackParamList = {
+  ShipmentList: undefined;
+  ShipmentDetail: { shipmentId: string };
+};
+
+type RootStackParamList = {
+  MainTabs: undefined;
   Profile: undefined;
 };
+
+// --- Nested stack screens ---
+
+function MapStackScreen() {
+  const S = createNativeStackNavigator();
+  return (
+    <S.Navigator screenOptions={{ headerShown: false }}>
+      <S.Screen name="Map" component={AppRoot} />
+    </S.Navigator>
+  );
+}
+
+function CargoStackScreen() {
+  const S = createNativeStackNavigator<CargoStackParamList>();
+  return (
+    <S.Navigator screenOptions={{ headerShown: false }}>
+      <S.Screen name="CargoList" component={CargoListScreen} />
+      <S.Screen name="CreateCargo" component={CreateCargoScreen} />
+      <S.Screen name="EditCargo" component={EditCargoScreen} />
+      <S.Screen name="CargoDetail" component={CargoDetailScreen} />
+      <S.Screen name="Offers" component={OffersScreen} />
+      <S.Screen name="LocationPicker" component={LocationPickerScreen} />
+    </S.Navigator>
+  );
+}
+
+function ShipmentStackScreen() {
+  const S = createNativeStackNavigator<ShipmentStackParamList>();
+  return (
+    <S.Navigator screenOptions={{ headerShown: false }}>
+      <S.Screen name="ShipmentList" component={ShipmentListScreen} />
+      <S.Screen name="ShipmentDetail" component={ShipmentDetailScreen} />
+    </S.Navigator>
+  );
+}
+
+// --- Main tab navigator ---
+
+function MainTabs() {
+  const Tabs = createBottomTabNavigator<MainTabParamList>();
+  return (
+    <Tabs.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: COLORS.blue,
+        tabBarInactiveTintColor: COLORS.gray,
+        tabBarStyle: { paddingBottom: 4, height: 56 },
+        tabBarLabelStyle: { fontFamily: 'Vazirmatn_500Medium', fontSize: 11 },
+      }}
+    >
+      <Tabs.Screen
+        name="MapTab"
+        component={MapStackScreen}
+        options={{
+          tabBarLabel: 'نقشه',
+          tabBarIcon: ({ color, size }) => <Ionicons name="map-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="CargoTab"
+        component={CargoStackScreen}
+        options={{
+          tabBarLabel: 'بارها',
+          tabBarIcon: ({ color, size }) => <Ionicons name="cube-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="ShipmentsTab"
+        component={ShipmentStackScreen}
+        options={{
+          tabBarLabel: 'حمل‌ونقل',
+          tabBarIcon: ({ color, size }) => <Ionicons name="car-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="NotificationsTab"
+        component={NotificationsScreen}
+        options={{
+          tabBarLabel: 'اعلان‌ها',
+          tabBarIcon: ({ color, size }) => <Ionicons name="notifications-outline" size={size} color={color} />,
+        }}
+      />
+    </Tabs.Navigator>
+  );
+}
+
+// --- Root navigator ---
 
 function AppNavigator() {
   const { user, isLoading } = useAuth();
   const AuthStack = createNativeStackNavigator<AuthStackParamList>();
-  const MainStack = createNativeStackNavigator<MainStackParamList>();
+  const RootStack = createNativeStackNavigator<RootStackParamList>();
 
   if (isLoading) {
     return (
@@ -98,14 +214,14 @@ function AppNavigator() {
   }
 
   return (
-    <MainStack.Navigator screenOptions={{ headerShown: false }}>
-      <MainStack.Screen name="Map" component={AppRoot} />
-      <MainStack.Screen name="Profile">
+    <RootStack.Navigator screenOptions={{ headerShown: false }}>
+      <RootStack.Screen name="MainTabs" component={MainTabs} />
+      <RootStack.Screen name="Profile">
         {({ navigation }) => (
           <ProfileScreen onBack={() => navigation.goBack()} />
         )}
-      </MainStack.Screen>
-    </MainStack.Navigator>
+      </RootStack.Screen>
+    </RootStack.Navigator>
   );
 }
 
@@ -292,7 +408,7 @@ function AppRoot() {
         <Pressable style={styles.fab} onPress={() => { hapticLight(); void handleGpsPress(); }}>
           <Ionicons name="navigate" size={22} color={COLORS.blue} />
         </Pressable>
-        <Pressable style={styles.fab} onPress={() => { hapticLight(); navigation.navigate('Profile' as never); }}>
+        <Pressable style={styles.fab} onPress={() => { hapticLight(); navigation.getParent()?.navigate('Profile'); }}>
           <Ionicons name="person" size={22} color={COLORS.textDark} />
         </Pressable>
       </View>
