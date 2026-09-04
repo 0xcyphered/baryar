@@ -58,7 +58,7 @@ export default function DriverVehiclesScreen() {
     }
   }, []);
 
-  useEffect(() => { setLoading(true); loadData(); }, [loadData]);
+  useEffect(() => { queueMicrotask(() => { setLoading(true); loadData(); }); }, [loadData]);
   const onRefresh = useCallback(() => { setRefreshing(true); loadData(); }, [loadData]);
 
   const handleAdd = async () => {

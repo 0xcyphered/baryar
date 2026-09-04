@@ -91,8 +91,10 @@ export default function ShipmentDetailScreen() {
   }, [shipmentId]);
 
   useEffect(() => {
-    setLoading(true);
-    loadData();
+    queueMicrotask(() => {
+      setLoading(true);
+      loadData();
+    });
   }, [loadData]);
 
   const onRefresh = useCallback(() => {

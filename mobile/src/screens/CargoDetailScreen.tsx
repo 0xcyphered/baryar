@@ -84,7 +84,7 @@ export default function CargoDetailScreen() {
   }, [cargoId]);
 
   useEffect(() => {
-    loadCargo();
+    queueMicrotask(loadCargo);
   }, [loadCargo]);
 
   const handlePublish = () => {

@@ -77,8 +77,10 @@ export default function CargoListScreen() {
   }, [filter]);
 
   useEffect(() => {
-    setLoading(true);
-    loadCargoes();
+    queueMicrotask(() => {
+      setLoading(true);
+      loadCargoes();
+    });
   }, [loadCargoes]);
 
   const onRefresh = useCallback(() => {

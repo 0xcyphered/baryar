@@ -6,7 +6,7 @@ const User = require('../../src/models/User');
 const PHONE_OWNER = '09121230001'; // canonical +989****0001
 const PHONE_OTHER = '09121230002'; // canonical +989****0002
 const PHONE_DRIVER = '09121230003'; // roles: ['driver']
-const canon = (phone) => `+98${phone[1]}****${phone.slice(-4)}`;
+const canon = (phone) => `+98${phone.slice(1)}`;
 const FIXED_CODE = '123456';
 
 describe('cargo draft CRUD', () => {
@@ -77,13 +77,19 @@ describe('cargo draft CRUD', () => {
     const { token } = await register(PHONE_OWNER);
     const noOrigin = validCargoBody();
     delete noOrigin.origin;
-    const res1 = await createCargo(token, noOrigin);
+    const res1 = await request(app)
+      .post('/api/cargo')
+      .set('Authorization', `Bearer ${token}`)
+      .send(noOrigin);
     expect(res1.status).toBe(400);
     expect(res1.body).toEqual({ error: 'validation_error' });
 
     const noDest = validCargoBody();
     delete noDest.destination;
-    const res2 = await createCargo(token, noDest);
+    const res2 = await request(app)
+      .post('/api/cargo')
+      .set('Authorization', `Bearer ${token}`)
+      .send(noDest);
     expect(res2.status).toBe(400);
     expect(res2.body).toEqual({ error: 'validation_error' });
   });

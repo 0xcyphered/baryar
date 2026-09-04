@@ -51,8 +51,10 @@ export default function NotificationsScreen() {
   }, []);
 
   useEffect(() => {
-    setLoading(true);
-    loadData();
+    queueMicrotask(() => {
+      setLoading(true);
+      loadData();
+    });
   }, [loadData]);
 
   const onRefresh = useCallback(() => {

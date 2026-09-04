@@ -6,9 +6,9 @@ const User = require('../../src/models/User');
 const OtpChallenge = require('../../src/models/OtpChallenge');
 
 const PHONE = '09121234567';
-const CANON = '+989891234567';
-const CANON_BLOCKED = '+989891234568';
-const CANON_LOCK = '+989891234569';
+const CANON = '+989121234567';
+const CANON_BLOCKED = '+989121234568';
+const CANON_LOCK = '+989121234569';
 const FIXED_CODE = '123456';
 
 describe('auth OTP', () => {
@@ -83,26 +83,26 @@ describe('auth OTP', () => {
     expect(replay.body).toEqual({ error: 'otp_invalid' });
   });
 
-  test('GET /api/me requires a bearer token', async () => {
-    const res = await request(app).get('/api/me');
+  test('GET /api/auth/me requires a bearer token', async () => {
+    const res = await request(app).get('/api/auth/me');
     expect(res.status).toBe(401);
     expect(res.body).toEqual({ error: 'unauthorized' });
   });
 
-  test('GET /api/me returns the current user for a valid bearer token', async () => {
+  test('GET /api/auth/me returns the current user for a valid bearer token', async () => {
     await request(app).post('/api/auth/request-otp').send({ phone: PHONE });
     const verify = await request(app).post('/api/auth/verify-otp').send({ phone: PHONE, code: FIXED_CODE });
     const token = verify.body.token;
 
-    const res = await request(app).get('/api/me').set('Authorization', `Bearer ${token}`);
+    const res = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.user.phone).toBe(CANON);
     expect(res.body.user.roles).toEqual(['cargo_owner']);
     expect(res.body.user.id).toMatch(/^[0-9a-f]{24}$/);
   });
 
-  test('GET /api/me rejects a garbage bearer token', async () => {
-    const res = await request(app).get('/api/me').set('Authorization', 'Bearer not-a-real-token');
+  test('GET /api/auth/me rejects a garbage bearer token', async () => {
+    const res = await request(app).get('/api/auth/me').set('Authorization', 'Bearer not-a-real-token');
     expect(res.status).toBe(401);
     expect(res.body).toEqual({ error: 'unauthorized' });
   });
@@ -113,7 +113,7 @@ describe('auth OTP', () => {
     expect(res.body).toEqual({ error: 'invalid_phone' });
   });
 
-  test('blocked users cannot mint a token and cannot use /api/me', async () => {
+  test('blocked users cannot mint a token and cannot use /api/auth/me', async () => {
     await User.create({ phone: CANON_BLOCKED, status: 'blocked', roles: ['cargo_owner'] });
 
     await request(app).post('/api/auth/request-otp').send({ phone: '09121234568' });
@@ -127,7 +127,7 @@ describe('auth OTP', () => {
       'test-secret-do-not-use',
       { expiresIn: '7d' }
     );
-    const me = await request(app).get('/api/me').set('Authorization', `Bearer ${token}`);
+    const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`);
     expect(me.status).toBe(401);
     expect(me.body).toEqual({ error: 'unauthorized' });
   });

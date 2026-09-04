@@ -8,7 +8,7 @@ const PHONE_DRIVER = '09121230011';   // registers via POST /profile (role grant
 const PHONE_DRIVER2 = '09121230012';  // second driver — ownership + plate-conflict tests
 const PHONE_ROLE_ONLY = '09121230013'; // pre-seeded roles: ['driver'], no profile
 const PHONE_CIVILIAN = '09121230014'; // plain cargo_owner via the OTP loop
-const canon = (phone) => `+98${phone[1]}****${phone.slice(-4)}`;
+const canon = (phone) => `+98${phone.slice(1)}`;
 const FIXED_CODE = '123456';
 
 describe('driver onboarding', () => {

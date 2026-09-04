@@ -67,8 +67,10 @@ export default function ShipmentListScreen() {
   }, [filter]);
 
   useEffect(() => {
-    setLoading(true);
-    loadShipments();
+    queueMicrotask(() => {
+      setLoading(true);
+      loadShipments();
+    });
   }, [loadShipments]);
 
   const onRefresh = useCallback(() => {

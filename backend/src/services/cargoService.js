@@ -116,6 +116,7 @@ module.exports = {
   publicCargo,
   createCargo,
   listCargo,
+  findOwned,
   updateCargo,
   deleteCargo,
   publishCargo,

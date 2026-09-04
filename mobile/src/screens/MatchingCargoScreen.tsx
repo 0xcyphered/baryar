@@ -51,7 +51,7 @@ export default function MatchingCargoScreen() {
     }
   }, [selectedVehicleId]);
 
-  useEffect(() => { setLoading(true); loadData(); }, [loadData]);
+  useEffect(() => { queueMicrotask(() => { setLoading(true); loadData(); }); }, [loadData]);
   const onRefresh = useCallback(() => { setRefreshing(true); loadData(); }, [loadData]);
 
   if (loading && !refreshing) {

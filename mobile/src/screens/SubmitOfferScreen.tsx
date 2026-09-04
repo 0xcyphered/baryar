@@ -41,7 +41,7 @@ export default function SubmitOfferScreen() {
     }
   }, []);
 
-  useEffect(() => { loadVehicles(); }, [loadVehicles]);
+  useEffect(() => { queueMicrotask(loadVehicles); }, [loadVehicles]);
 
   const handleSubmit = async () => {
     if (!selectedVehicleId) {

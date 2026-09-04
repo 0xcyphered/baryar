@@ -66,8 +66,10 @@ export default function OffersScreen() {
   }, [cargoId]);
 
   useEffect(() => {
-    setLoading(true);
-    loadOffers();
+    queueMicrotask(() => {
+      setLoading(true);
+      loadOffers();
+    });
   }, [loadOffers]);
 
   const onRefresh = useCallback(() => {
