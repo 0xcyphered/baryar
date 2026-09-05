@@ -13,52 +13,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import { getShipment, listShipmentEvents } from '../services/shipmentsApi';
 import type { Shipment, ShipmentEvent } from '../types';
-
-const STATUS_COLORS: Record<string, string> = {
-  assigned: '#f59e0b',
-  loading: '#3b82f6',
-  in_transit: '#3b82f6',
-  at_customs: '#f59e0b',
-  delivered: '#22c55e',
-  completed: '#22c55e',
-  cancelled: '#ef4444',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  assigned: 'تخصیص‌یافته',
-  loading: 'در حال بارگیری',
-  in_transit: 'در حال حمل',
-  at_customs: 'در گمرک',
-  delivered: 'تحویل‌شده',
-  completed: 'تکمیل‌شده',
-  cancelled: 'لغو‌شده',
-};
-
-const EVENT_TYPE_LABELS: Record<string, string> = {
-  status_change: 'تغییر وضعیت',
-  cargo_loaded: 'بارگیری',
-  driver_departed: 'حرکت راننده',
-  checkpoint: 'نقطه کنترل',
-  customs_stop: 'توقف گمرک',
-  note: 'یادداشت',
-};
-
-const EVENT_ICONS: Record<string, string> = {
-  status_change: 'swap-horizontal-outline',
-  cargo_loaded: 'cube-outline',
-  driver_departed: 'car-outline',
-  checkpoint: 'location-outline',
-  customs_stop: 'shield-checkmark-outline',
-  note: 'document-text-outline',
-};
+import {
+  SHIPMENT_STATUS_COLORS,
+  SHIPMENT_STATUS_LABELS,
+  EVENT_TYPE_LABELS,
+  EVENT_ICONS,
+  formatId,
+} from '../utils/constants';
 
 type ParamList = {
   ShipmentDetail: { shipmentId: string };
 };
-
-function formatId(id: string) {
-  return id.slice(0, 8) + '...';
-}
 
 export default function ShipmentDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -136,8 +101,8 @@ export default function ShipmentDetailScreen() {
 
       {/* Status badge */}
       <View style={styles.statusRow}>
-        <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[shipment.status] || '#9ca3af' }]}>
-          <Text style={styles.statusBadgeText}>{STATUS_LABELS[shipment.status] || shipment.status}</Text>
+        <View style={[styles.statusBadge, { backgroundColor: SHIPMENT_STATUS_COLORS[shipment.status] || '#9ca3af' }]}>
+          <Text style={styles.statusBadgeText}>{SHIPMENT_STATUS_LABELS[shipment.status] || shipment.status}</Text>
         </View>
       </View>
 
@@ -184,7 +149,7 @@ export default function ShipmentDetailScreen() {
                   </View>
                   {event.fromStatus && event.toStatus ? (
                     <Text style={styles.timelineStatus}>
-                      {STATUS_LABELS[event.fromStatus] || event.fromStatus} → {STATUS_LABELS[event.toStatus] || event.toStatus}
+                      {SHIPMENT_STATUS_LABELS[event.fromStatus] || event.fromStatus} → {SHIPMENT_STATUS_LABELS[event.toStatus] || event.toStatus}
                     </Text>
                   ) : null}
                   {event.note ? (

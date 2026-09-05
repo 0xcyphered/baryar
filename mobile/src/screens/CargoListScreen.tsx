@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import { listCargo } from '../services/cargoApi';
 import type { Cargo } from '../types';
+import { CARGO_STATUS_COLORS, CARGO_STATUS_LABELS, MODE_LABELS, formatCoord } from '../utils/constants';
 
 const STATUS_FILTERS = [
   { key: undefined, label: 'همه' },
@@ -23,36 +24,6 @@ const STATUS_FILTERS = [
   { key: 'cancelled', label: 'لغو‌شده' },
   { key: 'completed', label: 'تکمیل‌شده' },
 ] as const;
-
-const STATUS_COLORS: Record<string, string> = {
-  draft: '#9ca3af',
-  open: '#3b82f6',
-  matched: '#22c55e',
-  cancelled: '#ef4444',
-  completed: '#22c55e',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  draft: 'پیش‌نویس',
-  open: 'باز',
-  matched: 'تطبیق‌یافته',
-  cancelled: 'لغو‌شده',
-  completed: 'تکمیل‌شده',
-};
-
-const MODE_LABELS: Record<string, string> = {
-  land: 'زمینی',
-  sea: 'دریایی',
-  air: 'هوایی',
-  rail: 'ریلی',
-  multimodal: 'چندوجهی',
-};
-
-function formatCoord(place: { address: string; location: { coordinates: [number, number] } }) {
-  if (place.address) return place.address;
-  const [lng, lat] = place.location.coordinates;
-  return `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
-}
 
 export default function CargoListScreen() {
   const insets = useSafeAreaInsets();
@@ -155,8 +126,8 @@ export default function CargoListScreen() {
             >
               <View style={styles.cardTop}>
                 <Text style={styles.cardTitle}>{item.title || 'بدون عنوان'}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[item.status] || '#9ca3af' }]}>
-                  <Text style={styles.statusBadgeText}>{STATUS_LABELS[item.status] || item.status}</Text>
+                <View style={[styles.statusBadge, { backgroundColor: CARGO_STATUS_COLORS[item.status] || '#9ca3af' }]}>
+                  <Text style={styles.statusBadgeText}>{CARGO_STATUS_LABELS[item.status] || item.status}</Text>
                 </View>
               </View>
               <Text style={styles.cardRoute}>

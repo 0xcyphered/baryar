@@ -14,31 +14,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import { createCargo } from '../services/cargoApi';
 import { registerLocationCallback } from './LocationPickerScreen';
+import { MODE_LABELS, SPECIAL_LABELS, CARGO_ERROR_COPY } from '../utils/constants';
 
 const TRANSPORT_MODES = ['land', 'sea', 'air', 'rail', 'multimodal'] as const;
-const MODE_LABELS: Record<string, string> = {
-  land: 'زمینی',
-  sea: 'دریایی',
-  air: 'هوایی',
-  rail: 'ریلی',
-  multimodal: 'چندوجهی',
-};
 
 const SPECIALS = ['hazardous', 'fragile', 'refrigerated', 'livestock', 'oversized', 'other'] as const;
-const SPECIAL_LABELS: Record<string, string> = {
-  hazardous: 'خطرناک',
-  fragile: 'شکننده',
-  refrigerated: 'یخچالی',
-  livestock: 'دام',
-  oversized: 'بزرگ',
-  other: 'دیگر',
-};
-
-const CARGO_ERROR_COPY: Record<string, string> = {
-  cargo_limit: 'به سقف بارهای فعال مجاز رسیده‌اید. بارهای قدیمی را لغو کنید.',
-  validation_error: 'اطلاعات بار کامل نیست.',
-  unauthorized: 'برای ادامه دوباره وارد شوید.',
-};
 
 export default function CreateCargoScreen() {
   const insets = useSafeAreaInsets();

@@ -15,49 +15,11 @@ import { COLORS } from '../theme';
 import { getCargo, publishCargo, cancelCargo, deleteCargo } from '../services/cargoApi';
 import { listShipments } from '../services/shipmentsApi';
 import type { Cargo } from '../types';
-
-const STATUS_COLORS: Record<string, string> = {
-  draft: '#9ca3af',
-  open: '#3b82f6',
-  matched: '#22c55e',
-  cancelled: '#ef4444',
-  completed: '#22c55e',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  draft: 'پیش‌نویس',
-  open: 'باز',
-  matched: 'تطبیق‌یافته',
-  cancelled: 'لغو‌شده',
-  completed: 'تکمیل‌شده',
-};
-
-const MODE_LABELS: Record<string, string> = {
-  land: 'زمینی',
-  sea: 'دریایی',
-  air: 'هوایی',
-  rail: 'ریلی',
-  multimodal: 'چندوجهی',
-};
-
-const SPECIAL_LABELS: Record<string, string> = {
-  hazardous: 'خطرناک',
-  fragile: 'شکننده',
-  refrigerated: 'یخچالی',
-  livestock: 'دام',
-  oversized: 'بزرگ',
-  other: 'دیگر',
-};
+import { CARGO_STATUS_COLORS, CARGO_STATUS_LABELS, MODE_LABELS, SPECIAL_LABELS, formatCoord } from '../utils/constants';
 
 type ParamList = {
   CargoDetail: { cargoId: string };
 };
-
-function formatCoord(place: { address: string; location: { coordinates: [number, number] } }) {
-  if (place.address) return place.address;
-  const [lng, lat] = place.location.coordinates;
-  return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-}
 
 export default function CargoDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -199,8 +161,8 @@ export default function CargoDetailScreen() {
 
       {/* Status badge */}
       <View style={styles.statusRow}>
-        <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[cargo.status] || '#9ca3af' }]}>
-          <Text style={styles.statusBadgeText}>{STATUS_LABELS[cargo.status] || cargo.status}</Text>
+        <View style={[styles.statusBadge, { backgroundColor: CARGO_STATUS_COLORS[cargo.status] || '#9ca3af' }]}>
+          <Text style={styles.statusBadgeText}>{CARGO_STATUS_LABELS[cargo.status] || cargo.status}</Text>
         </View>
       </View>
 

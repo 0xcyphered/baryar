@@ -15,24 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import { listMyOffers, withdrawOffer } from '../services/matchingApi';
 import type { Offer } from '../types';
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'در انتظار',
-  accepted: 'پذیرفته‌شده',
-  rejected: 'ردشده',
-  withdrawn: 'لغوشده',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  pending: '#f59e0b',
-  accepted: '#22c55e',
-  rejected: '#ef4444',
-  withdrawn: '#9ca3af',
-};
-
-function formatId(id: string) {
-  return id.slice(0, 8) + '...';
-}
+import { OFFER_STATUS_LABELS, OFFER_STATUS_COLORS, formatId } from '../utils/constants';
 
 export default function DriverOffersScreen() {
   const insets = useSafeAreaInsets();
@@ -104,8 +87,8 @@ export default function DriverOffersScreen() {
         offers.map((offer) => (
           <View key={offer.id} style={styles.card}>
             <View style={styles.cardHeader}>
-              <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[offer.status] || '#9ca3af' }]}>
-                <Text style={styles.statusBadgeText}>{STATUS_LABELS[offer.status] || offer.status}</Text>
+              <View style={[styles.statusBadge, { backgroundColor: OFFER_STATUS_COLORS[offer.status] || '#9ca3af' }]}>
+                <Text style={styles.statusBadgeText}>{OFFER_STATUS_LABELS[offer.status] || offer.status}</Text>
               </View>
               <Text style={styles.price}>{offer.priceRial.toLocaleString('fa-IR')} ریال</Text>
             </View>

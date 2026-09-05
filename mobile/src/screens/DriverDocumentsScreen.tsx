@@ -20,27 +20,7 @@ import { listDocuments, uploadDocument, deleteDocument, listVehicles } from '../
 import { getAuthToken } from '../services/apiClient';
 import { API_BASE } from '../config';
 import type { DriverDocument, Vehicle } from '../types';
-
-const KIND_LABELS: Record<string, string> = {
-  driving_license: 'گواهینامه رانندگی',
-  vehicle_registration: 'سند وسیله نقلیه',
-  safety_card: 'کارت معاینه فنی',
-  national_id: 'کارت ملی',
-  professional_card: 'کارت حرفه‌ای',
-  other: 'سایر',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'در انتظار',
-  approved: 'پذیرش‌شده',
-  rejected: 'ردشده',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  pending: '#f59e0b',
-  approved: '#22c55e',
-  rejected: '#ef4444',
-};
+import { KIND_LABELS, DOC_STATUS_LABELS, DOC_STATUS_COLORS } from '../utils/constants';
 
 const KINDS = ['driving_license', 'vehicle_registration', 'safety_card', 'national_id', 'professional_card', 'other'];
 
@@ -290,8 +270,8 @@ export default function DriverDocumentsScreen() {
               <View key={doc.id} style={styles.card}>
                 <View style={{ flex: 1 }}>
                   <View style={styles.cardRow}>
-                    <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[doc.verificationStatus] || '#9ca3af' }]}>
-                      <Text style={styles.statusBadgeText}>{STATUS_LABELS[doc.verificationStatus] || doc.verificationStatus}</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: DOC_STATUS_COLORS[doc.verificationStatus] || '#9ca3af' }]}>
+                      <Text style={styles.statusBadgeText}>{DOC_STATUS_LABELS[doc.verificationStatus] || doc.verificationStatus}</Text>
                     </View>
                     {doc.originalName ? (
                       <Text style={styles.fileName}>{doc.originalName}</Text>

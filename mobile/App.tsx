@@ -68,12 +68,12 @@ I18nManager.forceRTL(true);
 let waypointCounter = 0;
 
 // --- Navigation param lists ---
-type AuthStackParamList = {
+export type AuthStackParamList = {
   OtpRequest: undefined;
   OtpVerify: { phone: string };
 };
 
-type MainTabParamList = {
+export type MainTabParamList = {
   MapTab: undefined;
   CargoTab: undefined;
   DriverTab: undefined;
@@ -81,7 +81,7 @@ type MainTabParamList = {
   NotificationsTab: undefined;
 };
 
-type CargoStackParamList = {
+export type CargoStackParamList = {
   CargoList: undefined;
   CreateCargo: undefined;
   EditCargo: { cargoId: string };
@@ -90,12 +90,12 @@ type CargoStackParamList = {
   LocationPicker: { mode: 'origin' | 'destination' };
 };
 
-type ShipmentStackParamList = {
+export type ShipmentStackParamList = {
   ShipmentList: undefined;
   ShipmentDetail: { shipmentId: string };
 };
 
-type DriverStackParamList = {
+export type DriverStackParamList = {
   DriverOnboarding: undefined;
   DriverDashboard: undefined;
   DriverVehicles: undefined;
@@ -106,7 +106,7 @@ type DriverStackParamList = {
   DriverShipmentDetail: { shipmentId: string };
 };
 
-type RootStackParamList = {
+export type RootStackParamList = {
   MainTabs: undefined;
   Profile: undefined;
 };

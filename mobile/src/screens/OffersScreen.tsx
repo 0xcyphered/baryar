@@ -15,20 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import { listCargoOffers, acceptOffer } from '../services/offersApi';
 import type { Offer } from '../types';
-
-const STATUS_COLORS: Record<string, string> = {
-  pending: '#f59e0b',
-  accepted: '#22c55e',
-  rejected: '#ef4444',
-  withdrawn: '#9ca3af',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'در انتظار',
-  accepted: 'پذیرفته‌شده',
-  rejected: 'رد شده',
-  withdrawn: 'پس‌گرفته‌شده',
-};
+import { OFFER_STATUS_COLORS, OFFER_STATUS_LABELS } from '../utils/constants';
 
 type ParamList = {
   Offers: { cargoId: string; cargoTitle: string };
@@ -137,8 +124,8 @@ export default function OffersScreen() {
                   <Text style={styles.driverId}>راننده: {item.driverUserId.slice(0, 8)}...</Text>
                   <Text style={styles.price}>{formatPrice(item.priceRial)} ریال</Text>
                 </View>
-                <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[item.status] || '#9ca3af' }]}>
-                  <Text style={styles.statusBadgeText}>{STATUS_LABELS[item.status] || item.status}</Text>
+                <View style={[styles.statusBadge, { backgroundColor: OFFER_STATUS_COLORS[item.status] || '#9ca3af' }]}>
+                  <Text style={styles.statusBadgeText}>{OFFER_STATUS_LABELS[item.status] || item.status}</Text>
                 </View>
               </View>
               {item.note ? (

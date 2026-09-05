@@ -15,14 +15,7 @@ import { COLORS } from '../theme';
 import { listMatchingCargo } from '../services/matchingApi';
 import { listVehicles } from '../services/driverApi';
 import type { Cargo, Vehicle } from '../types';
-
-const MODE_LABELS: Record<string, string> = {
-  land: 'زمینی',
-  sea: 'دریایی',
-  air: 'هوایی',
-  rail: 'ریلی',
-  multimodal: 'ترکیبی',
-};
+import { MODE_LABELS } from '../utils/constants';
 
 export default function MatchingCargoScreen() {
   const insets = useSafeAreaInsets();
