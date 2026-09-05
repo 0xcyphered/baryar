@@ -69,3 +69,23 @@ No change to Phase 1 booking MVP order. Worth adding to the roadmap backlog
 - **040-candidate:** public read-only cargo map (Phase 1-compatible, small)
 - **Phase 2 rows:** owner price-inquiry/provider comparison; customs-broker
   service-provider segment; FA/EN i18n; optional owner-facing PWA.
+
+## RFP cross-check (2026-09-05, full-text scan of resources/RFP.pdf)
+
+Are these gaps also missing from the original RFP, or only from our roadmap?
+
+| # | Gap | In RFP? | Evidence |
+|---|-----|---------|----------|
+| 1 | Public no-login cargo map | ❌ Not in RFP | RFP assumes registered users only (§4.2.1 starts with ثبت‌نام و ورود); §4.3 expected systems = mobile app + web admin + backend. No public marketplace surface. |
+| 2 | Owner price inquiry / provider comparison | ⚠️ Partially, generically | §4.2.1 "جست‌وجو و مشاهده گزینه‌های حمل‌ونقل / انتخاب یا درخواست خدمات" and §4.2.2 "مشاهده پیشنهادها و گزینه‌ها / انتخاب ارائه‌دهنده" cover view-offers-and-select. Explicit استعلام قیمت + price comparison UX is in neither RFP nor roadmap. |
+| 3 | Customs-clearance participant segment | ❌ Not in RFP | Customs appears only as a trip event ("ساعت 14:30 در گمرک توقف داشت", §4.2.5) — never as a participant role. RFP roles: cargo owner, company, driver, admin. |
+| 4 | FA/EN bilingual UI | ❌ Not in RFP | §7.1 NFRs list performance, scale, uptime, OWASP, iOS/Android versions, a11y, responsive — no i18n/multilingual requirement. |
+| 5 | Installable PWA / user-facing web client | ❌ Not in RFP | §4.3 defines user app as Android+iOS native; §8.1 deliverable is store-published Google Play + App Store apps. No web/PWA user surface. |
+
+Verdict: our V6 roadmap is a faithful 1:1 translation of the RFP — none of the
+five are RFP items our roadmap dropped. Four are genuinely beyond the RFP
+baseline; one (provider comparison) sharpens generic RFP language. Per RFP
+§4.4, post-SRS additions need a Change Request; §4.6 explicitly invites
+contractor-proposed extras **listed separately from base scope**, which is the
+right slot for these (roadmap backlog / Phase 2, never baked into Phase 1
+booking compliance).
