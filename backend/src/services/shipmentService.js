@@ -109,6 +109,17 @@ async function getForUser({ userId, id }) {
   return shipment;
 }
 
+// Plan 037: participant-scoped cargo read for an awarded shipment. Owner and
+// driver both get the cargo parameters/destinations; the route serializes it
+// with cargoService.publicCargo (lazy-required there to avoid the
+// cargo→matching→shipment require cycle).
+async function getCargoForUser({ userId, id }) {
+  const shipment = await getForUser({ userId, id });
+  const cargo = await Cargo.findById(shipment.cargoId);
+  if (!cargo) fail("not_found");
+  return cargo;
+}
+
 async function listEvents({ userId, id }) {
   const shipment = await getForUser({ userId, id });
   return ShipmentEvent.find({ shipmentId: shipment._id })
@@ -220,6 +231,7 @@ module.exports = {
   createForAward,
   listShipments,
   getForUser,
+  getCargoForUser,
   listEvents,
   transition,
   addEvent,

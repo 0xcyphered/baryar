@@ -560,6 +560,116 @@ describe('shipments routes', () => {
     expect(statusNotif).toBeDefined();
   });
 
+  test('GET /api/shipments/:id/cargo returns publicCargo for the awarded driver', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'SHPCRG1IR1');
+    const { cargoId } = await awardCargo(ownerToken, driverToken, vehicleId, 'Cargo Read');
+
+    const shipments = await request(app)
+      .get('/api/shipments')
+      .set('Authorization', `Bearer ${driverToken}`);
+    const shipmentId = shipments.body.shipments[0].id;
+
+    const res = await request(app)
+      .get(`/api/shipments/${shipmentId}/cargo`)
+      .set('Authorization', `Bearer ${driverToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.cargo.id).toBe(cargoId);
+    expect(res.body.cargo.title).toBe('Cargo Read');
+    expect(res.body.cargo.status).toBe('matched'); // publish + award flips cargo to matched
+    expect(res.body.cargo.origin.location.coordinates).toEqual([51.39, 35.69]);
+    expect(res.body.cargo.destination).toBeDefined();
+    expect(res.body.cargo.destination.address).toBe('Isfahan');
+    expect(res.body.cargo.dimensions.weightKg).toBe(10000);
+    expect(res.body.cargo.transportMode).toBe('land');
+    expect(Object.keys(res.body.cargo).sort()).toEqual(
+      [
+        'createdAt',
+        'deliverBy',
+        'description',
+        'destination',
+        'dimensions',
+        'id',
+        'origin',
+        'ownerUserId',
+        'pickupAt',
+        'specialCharacteristics',
+        'status',
+        'title',
+        'transportMode',
+        'updatedAt',
+      ].sort()
+    );
+  });
+
+  test('GET /api/shipments/:id/cargo returns the same cargo for the owner', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'SHPCRG2IR1');
+    const { cargoId } = await awardCargo(ownerToken, driverToken, vehicleId, 'Owner Cargo Read');
+
+    const shipments = await request(app)
+      .get('/api/shipments')
+      .set('Authorization', `Bearer ${ownerToken}`);
+    const shipmentId = shipments.body.shipments[0].id;
+
+    const res = await request(app)
+      .get(`/api/shipments/${shipmentId}/cargo`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.cargo.id).toBe(cargoId);
+  });
+
+  test('GET /api/shipments/:id/cargo for unrelated user is not_found (404, not 403)', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: otherToken } = await register(PHONE_OWNER2);
+    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'SHPCRG3IR1');
+    await awardCargo(ownerToken, driverToken, vehicleId, 'Foreign Cargo Read');
+
+    const shipments = await request(app)
+      .get('/api/shipments')
+      .set('Authorization', `Bearer ${driverToken}`);
+    const shipmentId = shipments.body.shipments[0].id;
+
+    const res = await request(app)
+      .get(`/api/shipments/${shipmentId}/cargo`)
+      .set('Authorization', `Bearer ${otherToken}`);
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'not_found' });
+  });
+
+  test('GET /api/shipments/:id/cargo is 401 without token', async () => {
+    const res = await request(app).get(`/api/shipments/${'0'.repeat(24)}/cargo`);
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: 'unauthorized' });
+  });
+
+  test('GET /api/shipments/:id/cargo with malformed id is invalid_shipment_id', async () => {
+    const { token } = await register(PHONE_OWNER);
+    const res = await request(app)
+      .get('/api/shipments/not-a-mongo-id/cargo')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'invalid_shipment_id' });
+  });
+
+  test('GET /api/shipments/:id still has no nested cargo (037 does not change the shipment shape)', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'SHPCRG4IR1');
+    const { cargoId } = await awardCargo(ownerToken, driverToken, vehicleId, 'Shape Guard');
+
+    const shipments = await request(app)
+      .get('/api/shipments')
+      .set('Authorization', `Bearer ${driverToken}`);
+    const shipmentId = shipments.body.shipments[0].id;
+
+    const res = await request(app)
+      .get(`/api/shipments/${shipmentId}`)
+      .set('Authorization', `Bearer ${driverToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.shipment.cargo).toBeUndefined();
+    expect(res.body.shipment.cargoId).toBe(cargoId);
+  });
+
   test('GET /api/shipments with invalid cargoId is invalid_cargo_id', async () => {
     const { token } = await register(PHONE_OWNER);
     const res = await request(app)

@@ -2,6 +2,10 @@ const express = require("express");
 const { auth } = require("../middleware/auth");
 const { requireNotMaintenance } = require("../middleware/maintenance");
 const shipmentService = require("../services/shipmentService");
+// One-way require: cargoService does not require shipmentService, so this
+// cannot cycle (plan 037). Serializes the participant cargo read with the
+// same publicCargo used by owner CRUD and the matching list.
+const cargoService = require("../services/cargoService");
 
 const router = express.Router();
 
@@ -72,6 +76,21 @@ router.get("/:id/events", async (req, res) => {
       events: events.map(shipmentService.publicEvent),
       count: events.length,
     });
+  } catch (err) {
+    return sendShipmentError(res, err);
+  }
+});
+
+// Plan 037: awarded driver / owner reads the cargo parameters and
+// destinations of their shipment. Participant gate lives in
+// getCargoForUser (strangers get 404, never 403).
+router.get("/:id/cargo", async (req, res) => {
+  try {
+    const cargo = await shipmentService.getCargoForUser({
+      userId: req.user._id,
+      id: req.params.id,
+    });
+    return res.status(200).json({ cargo: cargoService.publicCargo(cargo) });
   } catch (err) {
     return sendShipmentError(res, err);
   }

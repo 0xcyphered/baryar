@@ -307,6 +307,17 @@ describe('cargo draft CRUD', () => {
     expect(res.body).toEqual({ error: 'forbidden' });
   });
 
+  test('16b. driver-only user is forbidden on GET /api/cargo/:id too (037 did not punch a hole in owner CRUD)', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const created = await createCargo(ownerToken);
+    const driverToken = await registerDriver(PHONE_DRIVER);
+    const res = await request(app)
+      .get(`/api/cargo/${created.body.cargo.id}`)
+      .set('Authorization', `Bearer ${driverToken}`);
+    expect(res.status).toBe(403); // router-wide requireCargoOwner, not not_found
+    expect(res.body).toEqual({ error: 'forbidden' });
+  });
+
   test('17. GET /api/does-not-exist still falls through to not_found', async () => {
     const res = await request(app).get('/api/does-not-exist');
     expect(res.status).toBe(404);
