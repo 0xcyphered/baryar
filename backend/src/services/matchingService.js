@@ -2,6 +2,7 @@ const Cargo = require("../models/Cargo");
 const Offer = require("../models/Offer");
 const Vehicle = require("../models/Vehicle");
 const shipmentService = require("./shipmentService");
+const notificationService = require("./notificationService");
 
 const MAX_LIST = 100;
 // vehicleId/cargoId come from the route/params, never the body.
@@ -136,6 +137,13 @@ async function createOffer({ userId, cargoId, vehicleId, body }) {
     priceRial: Number(fields.priceRial),
     note: fields.note !== undefined ? fields.note : "",
   });
+  // Plan 029: tell the owner a bid arrived. Never throws (swallowed inside
+  // notificationService), so createOffer still returns the offer on failure.
+  await notificationService.notifyOfferReceived({
+    ownerUserId: cargo.ownerUserId,
+    cargo,
+    offer,
+  });
   return offer;
 }
 
@@ -221,6 +229,23 @@ async function acceptOffer({ userId, offerId }) {
     { status: "rejected" }
   );
 
+  // Plan 029: losing bidders are told the job went elsewhere. The winner is
+  // excluded ($ne) and still gets shipment_assigned from createForAward.
+  // Older rejected bids on the same cargo can produce a duplicate
+  // offer_rejected — known Phase 1 wart, accepted by the plan.
+  const losers = await Offer.find({
+    cargoId: offer.cargoId,
+    _id: { $ne: offer._id },
+    status: "rejected",
+  });
+  for (const loser of losers) {
+    await notificationService.notifyOfferRejected({
+      driverUserId: loser.driverUserId,
+      cargo,
+      offer: loser,
+    });
+  }
+
   // Plan 018: awarding a cargo creates the Shipment. Shipment has a unique
   // index on cargoId, so a partially-completed award retry lands in the
   // idempotency catch inside createForAward instead of double-notifying.
@@ -241,12 +266,22 @@ async function acceptOffer({ userId, offerId }) {
 // at pending forever. Reject — not withdraw — because withdraw is the
 // driver's own action; reject is the marketplace telling the driver the
 // job is gone. Idempotent; never touches accepted/withdrawn offers.
-// Notification-free on purpose: plan 029 owns offer_* notification types.
-async function rejectPendingOffersForCargo(cargoId) {
+// Plan 029: each rejected driver gets an offer_rejected notification.
+async function rejectPendingOffersForCargo(cargoId, cargoDoc) {
+  const pending = await Offer.find({ cargoId, status: "pending" });
+  if (pending.length === 0) return;
   await Offer.updateMany(
     { cargoId, status: "pending" },
     { status: "rejected" }
   );
+  const cargo = cargoDoc || (await Cargo.findById(cargoId));
+  for (const offer of pending) {
+    await notificationService.notifyOfferRejected({
+      driverUserId: offer.driverUserId,
+      cargo,
+      offer,
+    });
+  }
 }
 
 function publicOffer(offer) {

@@ -322,4 +322,104 @@ describe('notifications routes', () => {
     // Driver should NOT get a status notification for their own transition
     expect(after.body.count).toBe(countBefore);
   });
+
+  // --- Offer notifications (plan 029) ---
+
+  async function openCargoForOffer(ownerToken, title) {
+    const created = await request(app)
+      .post('/api/cargo')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send(openCargoBody({ title }));
+    expect(created.status).toBe(201);
+    const id = created.body.cargo.id;
+    const pub = await request(app)
+      .post(`/api/cargo/${id}/publish`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(pub.status).toBe(200);
+    return id;
+  }
+
+  async function makeOffer(driverToken, cargoId, vehicleId, priceRial) {
+    return request(app)
+      .post('/api/offers')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .send({ cargoId, vehicleId, priceRial });
+  }
+
+  test('owner gets offer_received with null shipmentId when a driver bids; bidder does not', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await setupDriverWithVehicle('09121230403', 'NOT91IR11');
+    const cargoId = await openCargoForOffer(ownerToken, 'Offer received cargo');
+
+    const offer = await makeOffer(driverToken, cargoId, vehicleId, 7000000);
+    expect(offer.status).toBe(201);
+
+    const ownerRes = await request(app)
+      .get('/api/notifications')
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(ownerRes.status).toBe(200);
+    const received = ownerRes.body.notifications.filter((n) => n.type === 'offer_received');
+    expect(received).toHaveLength(1);
+    expect(received[0].shipmentId).toBeNull();
+    expect(received[0].cargoId).toBe(cargoId);
+
+    // The bidding driver must NOT receive their own offer_received.
+    const driverRes = await request(app)
+      .get('/api/notifications')
+      .set('Authorization', `Bearer ${driverToken}`);
+    const driverOfferNotifs = driverRes.body.notifications.filter((n) => n.type === 'offer_received');
+    expect(driverOfferNotifs).toHaveLength(0);
+  });
+
+  test('losing bidder gets offer_rejected; winner gets shipment_assigned and no offer_rejected', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: winnerToken, vehicleId: winnerVehicle } = await setupDriverWithVehicle('09121230404', 'NOT92IR11');
+    const { token: loserToken, vehicleId: loserVehicle } = await setupDriverWithVehicle('09121230405', 'NOT93IR11');
+    const cargoId = await openCargoForOffer(ownerToken, 'Two-bidder cargo');
+
+    const winOffer = await makeOffer(winnerToken, cargoId, winnerVehicle, 5000000);
+    expect(winOffer.status).toBe(201);
+    const loseOffer = await makeOffer(loserToken, cargoId, loserVehicle, 6000000);
+    expect(loseOffer.status).toBe(201);
+
+    const accept = await request(app)
+      .post(`/api/offers/${winOffer.body.offer.id}/accept`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(accept.status).toBe(200);
+
+    const loserRes = await request(app)
+      .get('/api/notifications')
+      .set('Authorization', `Bearer ${loserToken}`);
+    const loserRejected = loserRes.body.notifications.filter((n) => n.type === 'offer_rejected');
+    expect(loserRejected.length).toBeGreaterThanOrEqual(1);
+
+    const winnerRes = await request(app)
+      .get('/api/notifications')
+      .set('Authorization', `Bearer ${winnerToken}`);
+    const winnerTypes = winnerRes.body.notifications.map((n) => n.type);
+    expect(winnerTypes).toContain('shipment_assigned');
+    expect(winnerTypes).not.toContain('offer_rejected');
+  });
+
+  test('offer_rejected on cancelled cargo has null shipmentId (cancel path)', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await setupDriverWithVehicle('09121230406', 'NOT94IR11');
+    const cargoId = await openCargoForOffer(ownerToken, 'Cancelled with pending bid');
+
+    const offer = await makeOffer(driverToken, cargoId, vehicleId, 3000000);
+    expect(offer.status).toBe(201);
+
+    const cancel = await request(app)
+      .post(`/api/cargo/${cargoId}/cancel`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(cancel.status).toBe(200);
+
+    const driverRes = await request(app)
+      .get('/api/notifications')
+      .set('Authorization', `Bearer ${driverToken}`);
+    const rejected = driverRes.body.notifications.filter((n) => n.type === 'offer_rejected');
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0].shipmentId).toBeNull();
+    expect(rejected[0].cargoId).toBe(cargoId);
+  });
 });

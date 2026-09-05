@@ -1,5 +1,6 @@
 const express = require('express');
 const { auth } = require('../middleware/auth');
+const { requireNotMaintenance } = require('../middleware/maintenance');
 const cargoService = require('../services/cargoService');
 
 const router = express.Router();
@@ -22,13 +23,17 @@ function sendCargoError(res, err) {
     forbidden: 403,
     not_found: 404,
     invalid_status: 409,
+    cargo_limit: 409,
   };
   const status = map[code] || 500;
   const error = map[code] ? code : 'server_error';
   return res.status(status).json({ error });
 }
 
-router.use(auth, requireCargoOwner);
+// Plan 029: maintenance 503 sits between auth and the role gate. In
+// maintenance a non-owner 503s first (they cannot write anyway); otherwise
+// they still 403 as before.
+router.use(auth, requireNotMaintenance, requireCargoOwner);
 
 router.post('/', async (req, res) => {
   try {

@@ -3,6 +3,7 @@ const Cargo = require('../models/Cargo');
 // matchingService does not require cargoService (it uses shipmentService), so
 // this is not a circular require (checked in plan 028).
 const matchingService = require('./matchingService');
+const settingsService = require('./settingsService');
 
 const MAX_LIST = 100;
 const EDITABLE_FIELDS = [
@@ -58,6 +59,16 @@ async function createCargo({ ownerUserId, body }) {
   const fields = pickEditableFields(body);
   if (!fields.origin || !fields.destination) fail('validation_error');
   assertTiming(fields.pickupAt, fields.deliverBy);
+  // Plan 029: enforce the admin cap on active cargo per owner. Applies to
+  // create only — publish/update/admin edits never increment the count
+  // (a draft already counted). Cap 0 is strict: no new cargo.
+  const settings = await settingsService.getSettings();
+  const cap = settings.maxActiveCargoPerOwner;
+  const activeCount = await Cargo.countDocuments({
+    ownerUserId,
+    status: { $in: ['draft', 'open', 'matched'] },
+  });
+  if (activeCount >= cap) fail('cargo_limit');
   const cargo = await Cargo.create({ ...fields, ownerUserId, status: 'draft' });
   return cargo;
 }

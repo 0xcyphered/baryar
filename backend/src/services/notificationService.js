@@ -35,20 +35,16 @@ function deliver(notification) {
 }
 
 // Never throws: a notification failure must never fail the shipment
-// lifecycle transition that triggered it.
-async function notifyShipment({ userId, type, shipment, cargo }) {
+// lifecycle transition that triggered it. Generalized in plan 029 so offer
+// notifications (which have no Shipment yet) go through the same swallow.
+async function notifyEvent({ userId, type, cargo, shipment, title, body }) {
   try {
-    const cargoTitle = (cargo && cargo.title) || "cargo";
-    const body =
-      type === "shipment_assigned"
-        ? `Cargo "${cargoTitle}" was matched and a shipment was created.`
-        : `Cargo "${cargoTitle}" status is now ${shipment.status}.`;
     const notification = await Notification.create({
       userId,
       type,
-      shipmentId: shipment._id,
-      cargoId: shipment.cargoId,
-      title: `Shipment ${shipment.status}`,
+      shipmentId: shipment ? shipment._id : null,
+      cargoId: cargo._id,
+      title,
       body,
     });
     deliver(notification);
@@ -57,6 +53,46 @@ async function notifyShipment({ userId, type, shipment, cargo }) {
     console.log(`notification create failed: ${err.message}`);
     return null;
   }
+}
+
+async function notifyShipment({ userId, type, shipment, cargo }) {
+  const cargoTitle = (cargo && cargo.title) || "cargo";
+  const body =
+    type === "shipment_assigned"
+      ? `Cargo "${cargoTitle}" was matched and a shipment was created.`
+      : `Cargo "${cargoTitle}" status is now ${shipment.status}.`;
+  return notifyEvent({
+    userId,
+    type,
+    cargo,
+    shipment,
+    title: `Shipment ${shipment.status}`,
+    body,
+  });
+}
+
+function notifyOfferReceived({ ownerUserId, cargo, offer }) {
+  const cargoTitle = (cargo && cargo.title) || "cargo";
+  return notifyEvent({
+    userId: ownerUserId,
+    type: "offer_received",
+    cargo,
+    shipment: null,
+    title: "New offer",
+    body: `A driver offered ${offer.priceRial} rial on "${cargoTitle}".`,
+  });
+}
+
+function notifyOfferRejected({ driverUserId, cargo, offer }) {
+  const cargoTitle = (cargo && cargo.title) || "cargo";
+  return notifyEvent({
+    userId: driverUserId,
+    type: "offer_rejected",
+    cargo,
+    shipment: null,
+    title: "Offer rejected",
+    body: `Your offer on "${cargoTitle}" was rejected.`,
+  });
 }
 
 async function listForUser({ userId, unread }) {
@@ -84,7 +120,7 @@ function publicNotification(notification) {
   return {
     id: notification._id.toString(),
     type: notification.type,
-    shipmentId: notification.shipmentId.toString(),
+    shipmentId: notification.shipmentId ? notification.shipmentId.toString() : null,
     cargoId: notification.cargoId.toString(),
     title: notification.title,
     body: notification.body,
@@ -94,4 +130,12 @@ function publicNotification(notification) {
   };
 }
 
-module.exports = { notifyShipment, listForUser, markRead, publicNotification };
+module.exports = {
+  notifyEvent,
+  notifyShipment,
+  notifyOfferReceived,
+  notifyOfferRejected,
+  listForUser,
+  markRead,
+  publicNotification,
+};

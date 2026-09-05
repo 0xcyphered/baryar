@@ -1,5 +1,6 @@
 const express = require("express");
 const { auth } = require("../middleware/auth");
+const { requireNotMaintenance } = require("../middleware/maintenance");
 const matchingService = require("../services/matchingService");
 const cargoService = require("../services/cargoService");
 
@@ -32,7 +33,7 @@ function sendMatchingError(res, err) {
   return res.status(status).json({ error });
 }
 
-router.use(auth, requireDriver);
+router.use(auth, requireNotMaintenance, requireDriver);
 
 router.get("/cargo", async (req, res) => {
   try {

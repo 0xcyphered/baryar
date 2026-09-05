@@ -1,5 +1,6 @@
 const express = require("express");
 const { auth } = require("../middleware/auth");
+const { requireNotMaintenance } = require("../middleware/maintenance");
 const shipmentService = require("../services/shipmentService");
 
 const router = express.Router();
@@ -31,7 +32,7 @@ function sendShipmentError(res, err) {
 
 // Both owner and driver read shipments; transitions and event logging are
 // driver-only, so gating is per-route rather than router-wide.
-router.use(auth);
+router.use(auth, requireNotMaintenance);
 
 router.get("/", async (req, res) => {
   try {

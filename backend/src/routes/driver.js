@@ -1,5 +1,6 @@
 const express = require('express');
 const { auth } = require('../middleware/auth');
+const { requireNotMaintenance } = require('../middleware/maintenance');
 const driverService = require('../services/driverService');
 
 const router = express.Router();
@@ -31,7 +32,7 @@ function sendDriverError(res, err) {
   return res.status(status).json({ error });
 }
 
-router.use(auth);
+router.use(auth, requireNotMaintenance);
 
 // Decision 2: driver registration is self-service — any active authenticated
 // user may call this; it grants the `driver` role (idempotent) and upserts the

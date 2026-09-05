@@ -1,5 +1,6 @@
 const express = require("express");
 const { auth } = require("../middleware/auth");
+const { requireNotMaintenance } = require("../middleware/maintenance");
 const notificationService = require("../services/notificationService");
 
 const router = express.Router();
@@ -21,7 +22,7 @@ function sendNotificationError(res, err) {
 }
 
 // Every notification is the requester's own; no role gates needed.
-router.use(auth);
+router.use(auth, requireNotMaintenance);
 
 router.get("/", async (req, res) => {
   try {

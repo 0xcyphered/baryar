@@ -1,5 +1,6 @@
 const express = require("express");
 const { auth } = require("../middleware/auth");
+const { requireNotMaintenance } = require("../middleware/maintenance");
 const matchingService = require("../services/matchingService");
 const cargoService = require("../services/cargoService");
 
@@ -41,7 +42,7 @@ function sendOfferError(res, err) {
 
 // Both roles appear in this router (drivers bid, owners award), so gating is
 // per-route rather than router-wide.
-router.use(auth);
+router.use(auth, requireNotMaintenance);
 
 router.post("/", requireDriver, async (req, res) => {
   try {
