@@ -33,6 +33,12 @@ const SPECIAL_LABELS: Record<string, string> = {
   other: 'دیگر',
 };
 
+const CARGO_ERROR_COPY: Record<string, string> = {
+  cargo_limit: 'به سقف بارهای فعال مجاز رسیده‌اید. بارهای قدیمی را لغو کنید.',
+  validation_error: 'اطلاعات بار کامل نیست.',
+  unauthorized: 'برای ادامه دوباره وارد شوید.',
+};
+
 type ParamList = {
   EditCargo: { cargoId: string };
 };
@@ -120,10 +126,10 @@ export default function EditCargoScreen() {
       });
       navigation.goBack();
     } catch (e: unknown) {
-      const msg = e && typeof e === 'object' && 'error' in e
+      const code = e && typeof e === 'object' && 'error' in e
         ? String((e as { error: string }).error)
-        : 'خطا در ویرایش بار';
-      setError(msg);
+        : '';
+      setError(CARGO_ERROR_COPY[code] || 'خطا در ویرایش بار');
     } finally {
       setSaving(false);
     }

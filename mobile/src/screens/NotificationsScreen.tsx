@@ -15,6 +15,14 @@ import { COLORS } from '../theme';
 import { listNotifications, markNotificationRead } from '../services/notificationsApi';
 import type { AppNotification } from '../types';
 
+// 029 contract: shipment_* rows carry shipmentId; offer_* rows have shipmentId null and link to the cargo.
+const TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; label: string }> = {
+  shipment_assigned: { icon: 'car', color: COLORS.blue, label: 'سفر جدید' },
+  shipment_status: { icon: 'navigate-outline', color: COLORS.blue, label: 'وضعیت سفر' },
+  offer_received: { icon: 'hand-left-outline', color: '#f59e0b', label: 'پیشنهاد جدید' },
+  offer_rejected: { icon: 'close-circle-outline', color: COLORS.red, label: 'پیشنهاد رد شد' },
+};
+
 function formatTime(dateStr: string): string {
   const d = new Date(dateStr);
   const now = new Date();
@@ -75,6 +83,10 @@ export default function NotificationsScreen() {
     }
     if (notif.shipmentId) {
       navigation.navigate('ShipmentDetail' as never, { shipmentId: notif.shipmentId } as never);
+      return;
+    }
+    if (notif.cargoId) {
+      navigation.navigate('CargoDetail' as never, { cargoId: notif.cargoId } as never);
     }
   };
 
@@ -107,15 +119,24 @@ export default function NotificationsScreen() {
           }
           renderItem={({ item }) => {
             const unread = !item.readAt;
+            const meta = TYPE_META[item.type];
             return (
               <Pressable style={[styles.card, unread && styles.cardUnread]} onPress={() => handlePress(item)}>
                 {unread && <View style={styles.unreadDot} />}
+                {meta ? (
+                  <View style={[styles.typeIconBox, { backgroundColor: meta.color }]}>
+                    <Ionicons name={meta.icon} size={16} color={COLORS.white} />
+                  </View>
+                ) : null}
                 <View style={styles.cardContent}>
-                  <Text style={styles.cardTitle}>{item.title}</Text>
+                  <View style={styles.titleRow}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+                    {meta ? <Text style={styles.typeBadge}>{meta.label}</Text> : null}
+                  </View>
                   <Text style={styles.cardBody} numberOfLines={2}>{item.body}</Text>
                   <Text style={styles.cardTime}>{formatTime(item.createdAt)}</Text>
                 </View>
-                {item.shipmentId ? (
+                {item.shipmentId || meta ? (
                   <Ionicons name="chevron-back" size={18} color={COLORS.gray} />
                 ) : null}
               </Pressable>
@@ -189,6 +210,29 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'Vazirmatn_400Regular',
     color: COLORS.gray,
+  },
+  typeIconBox: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  typeBadge: {
+    fontSize: 10,
+    fontFamily: 'Vazirmatn_700Bold',
+    color: COLORS.gray,
+    backgroundColor: COLORS.grayLight,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+    overflow: 'hidden',
   },
   emptyBox: {
     alignItems: 'center',

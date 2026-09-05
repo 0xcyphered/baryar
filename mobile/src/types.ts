@@ -112,7 +112,7 @@ export interface ShipmentEvent {
 export interface AppNotification {
   id: string;
   type: string;
-  shipmentId: string;
+  shipmentId: string | null;   // 029: offer_* rows have no shipment
   cargoId: string;
   title: string;
   body: string;
