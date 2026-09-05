@@ -3,13 +3,14 @@ const DriverProfile = require('../models/DriverProfile');
 const Vehicle = require('../models/Vehicle');
 const Document = require('../models/Document');
 const User = require('../models/User');
+const storageService = require('./storageService');
 
 const MAX_LIST = 100;
 
 const PROFILE_FIELDS = ['licenseNumber', 'professionalCardNumber'];
 const VEHICLE_FIELDS = ['vehicleType', 'plate', 'capacityWeightKg', 'capacityVolumeM3', 'year'];
 const VEHICLE_UPDATE_FIELDS = ['vehicleType', 'capacityWeightKg', 'capacityVolumeM3', 'year', 'status'];
-const DOCUMENT_FIELDS = ['kind', 'vehicleId', 'storageKey', 'originalName', 'mimeType'];
+const DOCUMENT_FIELDS = ['kind', 'vehicleId', 'originalName', 'mimeType'];
 
 function fail(code) {
   const e = new Error(code);
@@ -152,21 +153,58 @@ async function deleteVehicle({ userId, id }) {
   return vehicle;
 }
 
-async function createDocument({ userId, body }) {
-  const fields = pickFields(body, DOCUMENT_FIELDS);
-  if (fields.vehicleId !== undefined && fields.vehicleId !== null) {
-    assertId(fields.vehicleId, 'invalid_vehicle_id');
-    const vehicle = await Vehicle.findOne({ _id: fields.vehicleId, ownerUserId: userId });
+async function assertDocumentVehicle({ userId, vehicleId }) {
+  if (vehicleId !== undefined && vehicleId !== null) {
+    assertId(vehicleId, 'invalid_vehicle_id');
+    const vehicle = await Vehicle.findOne({ _id: vehicleId, ownerUserId: userId });
     if (!vehicle) fail('not_found'); // decision 10: do not leak other drivers' vehicles
   }
+}
+
+async function createDocument({ userId, body }) {
+  const fields = pickFields(body, DOCUMENT_FIELDS);
+  await assertDocumentVehicle({ userId, vehicleId: fields.vehicleId });
   return Document.create({
     ...fields,
     userId,
+    storageKey: '', // server-generated only; JSON stubs have no bytes (plan 030)
     verificationStatus: 'pending', // decision 10: body can never set verification fields
     reviewerUserId: null,
     reviewedAt: null,
     rejectionReason: '',
   });
+}
+
+// Plan 030: multipart upload — multer (memory, max 5MB) hands us the bytes and
+// storageService owns the server-generated key on local disk.
+async function createDocumentFromUpload({ userId, body, file }) {
+  if (!file) fail('validation_error');
+  const fields = pickFields(body, DOCUMENT_FIELDS);
+  if (!fields.kind) fail('validation_error');
+  await assertDocumentVehicle({ userId, vehicleId: fields.vehicleId });
+  const stored = await storageService.saveBuffer({
+    userId,
+    mimeType: file.mimetype,
+    buffer: file.buffer,
+    originalName: file.originalname,
+  });
+  try {
+    return await Document.create({
+      ...fields,
+      userId,
+      storageKey: stored.storageKey,
+      originalName: stored.originalName,
+      mimeType: stored.mimeType,
+      verificationStatus: 'pending',
+      reviewerUserId: null,
+      reviewedAt: null,
+      rejectionReason: '',
+    });
+  } catch (err) {
+    // Do not orphan the file if the DB write fails.
+    await storageService.unlinkKey(stored.storageKey);
+    throw err;
+  }
 }
 
 async function listDocuments({ userId, kind }) {
@@ -183,8 +221,25 @@ async function deleteDocument({ userId, id }) {
   const document = await Document.findOne({ _id: id, userId });
   if (!document) fail('not_found');
   if (document.verificationStatus !== 'pending') fail('document_locked');
+  await storageService.unlinkKey(document.storageKey); // missing file is not an error
   await document.deleteOne();
   return document;
+}
+
+// Plan 030: owner-only file download. 404 (not 403) for other users' docs.
+async function openDocumentFile({ userId, id }) {
+  assertId(id, 'invalid_document_id');
+  const document = await Document.findOne({ _id: id, userId });
+  if (!document) fail('not_found');
+  if (!document.storageKey) fail('not_found');
+  let stream;
+  try {
+    stream = storageService.createReadStream(document.storageKey);
+  } catch (err) {
+    if (err && err.code === 'not_found') fail('not_found');
+    throw err;
+  }
+  return { document, stream };
 }
 
 module.exports = {
@@ -198,6 +253,8 @@ module.exports = {
   updateVehicle,
   deleteVehicle,
   createDocument,
+  createDocumentFromUpload,
+  openDocumentFile,
   listDocuments,
   deleteDocument,
 };

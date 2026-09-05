@@ -184,6 +184,20 @@ router.get('/documents', async (req, res) => {
   }
 });
 
+router.get('/documents/:id/file', async (req, res) => {
+  try {
+    const { document, stream } = await adminService.openDocumentFileAdmin({ id: req.params.id });
+    res.setHeader('Content-Type', document.mimeType || 'application/octet-stream');
+    stream.on('error', () => {
+      if (!res.headersSent) res.status(404).json({ error: 'not_found' });
+      else res.end();
+    });
+    stream.pipe(res);
+  } catch (err) {
+    return sendAdminError(res, err);
+  }
+});
+
 router.post('/documents/:id/verify', async (req, res) => {
   try {
     const document = await adminService.verifyDocument({

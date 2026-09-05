@@ -29,3 +29,6 @@ dist-ssr
 # Pipeline overlap lock
 .pipeline.lock
 
+# Local document uploads (plan 030)
+backend/uploads/
+

@@ -1,5 +1,7 @@
 require('../setup');
 const request = require('supertest');
+const fs = require('fs');
+const path = require('path');
 const { createApp } = require('../../src/app');
 const User = require('../../src/models/User');
 const Document = require('../../src/models/Document');
@@ -10,6 +12,11 @@ const PHONE_ROLE_ONLY = '09121230013'; // pre-seeded roles: ['driver'], no profi
 const PHONE_CIVILIAN = '09121230014'; // plain cargo_owner via the OTP loop
 const canon = (phone) => `+98${phone.slice(1)}`;
 const FIXED_CODE = '123456';
+// Plan 030: 1×1 PNG (68 bytes) for multipart upload tests.
+const PNG_1X1 = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64'
+);
 
 describe('driver onboarding', () => {
   const app = createApp();
@@ -18,6 +25,11 @@ describe('driver onboarding', () => {
     process.env.JWT_SECRET = 'test-secret-do-not-use';
     process.env.OTP_FIXED_CODE = FIXED_CODE;
     process.env.NODE_ENV = 'test';
+    process.env.UPLOAD_DIR = path.join(__dirname, `../tmp-uploads-${process.pid}`);
+  });
+
+  afterAll(() => {
+    fs.rmSync(process.env.UPLOAD_DIR, { recursive: true, force: true });
   });
 
   async function register(phone) {
@@ -348,5 +360,112 @@ describe('driver onboarding', () => {
     const res = await request(app).get('/api/does-not-exist');
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: 'not_found' });
+  });
+
+  // --- Plan 030: local-disk document upload ---
+
+  async function uploadDoc(token, filename, overrides = {}) {
+    const req = request(app)
+      .post('/api/driver/documents/upload')
+      .set('Authorization', `Bearer ${token}`)
+      .field('kind', 'national_id');
+    if (filename !== null) req.attach('file', PNG_1X1, filename);
+    return req;
+  }
+
+  test('19. POST /documents/upload stores bytes, returns server-generated storageKey', async () => {
+    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const res = await uploadDoc(token, 'card.png');
+    expect(res.status).toBe(201);
+    expect(res.body.document.verificationStatus).toBe('pending');
+    expect(res.body.document.storageKey).toMatch(/^documents\/[a-f0-9]{24}\/.+\.png$/);
+    expect(res.body.document.originalName).toBe('card.png');
+    expect(res.body.document.mimeType).toBe('image/png');
+    expect(res.body.document.kind).toBe('national_id');
+
+    const abs = require('../../src/services/storageService').assertSafeKey(res.body.document.storageKey);
+    expect(fs.existsSync(abs)).toBe(true);
+    expect(fs.statSync(abs).size).toBe(PNG_1X1.length);
+  });
+
+  test('20. POST /documents/upload without a file part is 400 validation_error', async () => {
+    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const res = await uploadDoc(token, null);
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'validation_error' });
+  });
+
+  test('21. POST /documents/upload with a disallowed mime is 400 invalid_file_type', async () => {
+    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const res = await request(app)
+      .post('/api/driver/documents/upload')
+      .set('Authorization', `Bearer ${token}`)
+      .field('kind', 'national_id')
+      .attach('file', Buffer.from('GIF89a'), { filename: 'card.gif', contentType: 'image/gif' });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'invalid_file_type' });
+  });
+
+  test('22. JSON POST /documents discards a client-supplied storageKey', async () => {
+    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const res = await request(app)
+      .post('/api/driver/documents')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ kind: 'driving_license', storageKey: '../etc/passwd' });
+    expect(res.status).toBe(201);
+    expect(res.body.document.storageKey).toBe('');
+  });
+
+  test('23. owner GET /documents/:id/file streams the uploaded bytes back', async () => {
+    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const up = await uploadDoc(token, 'card.png');
+    const id = up.body.document.id;
+
+    const res = await request(app)
+      .get(`/api/driver/documents/${id}/file`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('image/png');
+    expect(Buffer.from(res.body).length).toBe(PNG_1X1.length);
+    expect(Buffer.compare(Buffer.from(res.body), PNG_1X1)).toBe(0);
+  });
+
+  test('24. another driver GET on that file is 404 not_found (existence not leaked)', async () => {
+    const owner = await registerDriverViaProfile(PHONE_DRIVER);
+    const other = await registerDriverViaProfile(PHONE_DRIVER2);
+    const up = await uploadDoc(owner, 'card.png');
+
+    const res = await request(app)
+      .get(`/api/driver/documents/${up.body.document.id}/file`)
+      .set('Authorization', `Bearer ${other}`);
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'not_found' });
+  });
+
+  test('25. GET .../file on a JSON stub (empty storageKey) is 404', async () => {
+    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const stub = await request(app)
+      .post('/api/driver/documents')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ kind: 'driving_license' });
+    const res = await request(app)
+      .get(`/api/driver/documents/${stub.body.document.id}/file`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'not_found' });
+  });
+
+  test('26. DELETE of an uploaded pending doc removes the file from disk', async () => {
+    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const up = await uploadDoc(token, 'card.png');
+    const storageKey = up.body.document.storageKey;
+    const abs = require('../../src/services/storageService').assertSafeKey(storageKey);
+    expect(fs.existsSync(abs)).toBe(true);
+
+    const del = await request(app)
+      .delete(`/api/driver/documents/${up.body.document.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(del.status).toBe(200);
+    expect(fs.existsSync(abs)).toBe(false);
   });
 });

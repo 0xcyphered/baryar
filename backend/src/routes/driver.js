@@ -1,9 +1,24 @@
 const express = require('express');
+const multer = require('multer');
 const { auth } = require('../middleware/auth');
 const { requireNotMaintenance } = require('../middleware/maintenance');
 const driverService = require('../services/driverService');
+const storageService = require('../services/storageService');
 
 const router = express.Router();
+
+// Plan 030: the ONE place memoryStorage is allowed (max 5MB per file);
+// storageService.saveBuffer moves the bytes to local disk afterwards.
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: storageService.MAX_BYTES, files: 1 },
+  fileFilter: (req, file, cb) => {
+    if (storageService.ALLOWED_MIME.has(file.mimetype)) return cb(null, true);
+    const err = new Error('invalid_file_type');
+    err.code = 'invalid_file_type';
+    return cb(err);
+  },
+});
 
 function requireDriver(req, res, next) {
   if (!req.user || !Array.isArray(req.user.roles) || !req.user.roles.includes('driver')) {
@@ -26,6 +41,9 @@ function sendDriverError(res, err) {
     not_found: 404,
     plate_in_use: 409,
     document_locked: 409,
+    invalid_file_type: 400,
+    file_too_large: 413,
+    LIMIT_FILE_SIZE: 413,
   };
   const status = map[code] || 500;
   const error = map[code] ? code : 'server_error';
@@ -108,6 +126,40 @@ router.post('/documents', async (req, res) => {
   try {
     const document = await driverService.createDocument({ userId: req.user._id, body: req.body });
     return res.status(201).json({ document: driverService.publicDocument(document) });
+  } catch (err) {
+    return sendDriverError(res, err);
+  }
+});
+
+router.post('/documents/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'validation_error' });
+    const document = await driverService.createDocumentFromUpload({
+      userId: req.user._id,
+      body: req.body,
+      file: req.file,
+    });
+    return res.status(201).json({ document: driverService.publicDocument(document) });
+  } catch (err) {
+    return sendDriverError(res, err);
+  }
+});
+
+router.get('/documents/:id/file', async (req, res) => {
+  try {
+    const { document, stream } = await driverService.openDocumentFile({
+      userId: req.user._id,
+      id: req.params.id,
+    });
+    res.setHeader('Content-Type', document.mimeType || 'application/octet-stream');
+    if (document.originalName) {
+      res.setHeader('Content-Disposition', `inline; filename="${document.originalName.replace(/"/g, '')}"`);
+    }
+    stream.on('error', () => {
+      if (!res.headersSent) res.status(404).json({ error: 'not_found' });
+      else res.end();
+    });
+    stream.pipe(res);
   } catch (err) {
     return sendDriverError(res, err);
   }

@@ -10,6 +10,7 @@ const cargoService = require('./cargoService');
 const matchingService = require('./matchingService');
 const { EDITABLE_FIELDS } = require('./cargoService');
 const { normalizeIranPhone } = require('../utils/phone');
+const storageService = require('./storageService');
 
 const MAX_LIST = 100;
 
@@ -304,6 +305,22 @@ function driverServicePublicDocument(document) {
   };
 }
 
+// Plan 030: admin file download — streams the stored bytes for verification.
+async function openDocumentFileAdmin({ id }) {
+  assertId(id, 'invalid_document_id');
+  const document = await Document.findById(id);
+  if (!document) fail('not_found');
+  if (!document.storageKey) fail('not_found');
+  let stream;
+  try {
+    stream = storageService.createReadStream(document.storageKey);
+  } catch (err) {
+    if (err && err.code === 'not_found') fail('not_found');
+    throw err;
+  }
+  return { document, stream };
+}
+
 async function verifyDocument({ id, decision, reason, reviewerUserId }) {
   if (!['approved', 'rejected'].includes(decision)) fail('validation_error');
   if (decision === 'rejected' && (!reason || !reason.trim())) fail('validation_error');
@@ -424,6 +441,7 @@ module.exports = {
   overview,
   listDocuments,
   verifyDocument,
+  openDocumentFileAdmin,
   listShipmentsAdmin,
   ensureAdminBootstrap,
 };

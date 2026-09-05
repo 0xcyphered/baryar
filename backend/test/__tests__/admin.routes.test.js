@@ -632,4 +632,54 @@ describe('admin routes', () => {
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: 'validation_error' });
   });
+
+  // --- Plan 030: admin file download ---
+
+  const PNG_1X1 = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64'
+  );
+
+  async function uploadAsDriver(driverToken) {
+    const res = await request(app)
+      .post('/api/driver/documents/upload')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .field('kind', 'national_id')
+      .attach('file', PNG_1X1, { filename: 'card.png', contentType: 'image/png' });
+    expect(res.status).toBe(201);
+    return res.body.document;
+  }
+
+  test('GET /api/admin/documents/:id/file streams the uploaded bytes', async () => {
+    const { token: admTok } = await createAdmin();
+    const { token: drvTok } = await registerDriverViaProfile(PHONE_DRIVER);
+    const doc = await uploadAsDriver(drvTok);
+
+    const res = await request(app)
+      .get(`/api/admin/documents/${doc.id}/file`)
+      .set('Authorization', `Bearer ${admTok}`);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('image/png');
+    expect(Buffer.compare(Buffer.from(res.body), PNG_1X1)).toBe(0);
+  });
+
+  test('driver token on the admin file URL is 403 forbidden', async () => {
+    const { token: drvTok } = await registerDriverViaProfile(PHONE_DRIVER);
+    const doc = await uploadAsDriver(drvTok);
+
+    const res = await request(app)
+      .get(`/api/admin/documents/${doc.id}/file`)
+      .set('Authorization', `Bearer ${drvTok}`);
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: 'forbidden' });
+  });
+
+  test('GET /api/admin/documents/:id/file on an unknown id is 404', async () => {
+    const { token: admTok } = await createAdmin();
+    const res = await request(app)
+      .get(`/api/admin/documents/${'a'.repeat(24)}/file`)
+      .set('Authorization', `Bearer ${admTok}`);
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'not_found' });
+  });
 });
