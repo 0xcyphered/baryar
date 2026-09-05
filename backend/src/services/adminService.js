@@ -381,9 +381,9 @@ async function ensureAdminBootstrap() {
       await User.findOneAndUpdate(
         { phone },
         {
-          $setOnInsert: { phone, roles: ['admin'], phoneVerifiedAt: new Date() },
           $addToSet: { roles: 'admin' },
           $set: { status: 'active' },
+          $setOnInsert: { phone, phoneVerifiedAt: new Date() },
         },
         { upsert: true, new: true, runValidators: true }
       );
