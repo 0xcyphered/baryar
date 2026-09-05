@@ -401,6 +401,42 @@ describe('admin routes', () => {
     expect(res.body.cargo.status).toBe('cancelled');
   });
 
+  test('POST /api/admin/cargo/:id/cancel rejects pending offers (plan 028)', async () => {
+    const { token: admTok } = await createAdmin();
+    const { token: ownTok } = await register(PHONE_OWNER);
+    const { token: drvTok } = await registerDriverViaProfile(PHONE_DRIVER);
+    const vRes = await request(app)
+      .post('/api/driver/vehicles')
+      .set('Authorization', `Bearer ${drvTok}`)
+      .send({ vehicleType: 'truck', plate: 'ADMCNL1IR11', capacityWeightKg: 30000, capacityVolumeM3: 60, year: 1400 });
+    expect(vRes.status).toBe(201);
+    const vehicleId = vRes.body.vehicle.id;
+
+    // Owner publishes an open cargo and the driver bids on it.
+    const createRes = await request(app).post('/api/cargo').set('Authorization', `Bearer ${ownTok}`).send(cargoBody('Admin Cancel Offers'));
+    const cargoId = createRes.body.cargo.id;
+    const pub = await request(app).post(`/api/cargo/${cargoId}/publish`).set('Authorization', `Bearer ${ownTok}`);
+    expect(pub.status).toBe(200);
+    const offerRes = await request(app)
+      .post('/api/offers')
+      .set('Authorization', `Bearer ${drvTok}`)
+      .send({ cargoId, vehicleId, priceRial: 1500000 });
+    expect(offerRes.status).toBe(201);
+
+    const res = await request(app)
+      .post(`/api/admin/cargo/${cargoId}/cancel`)
+      .set('Authorization', `Bearer ${admTok}`);
+    expect(res.status).toBe(200);
+    expect(res.body.cargo.status).toBe('cancelled');
+
+    const list = await request(app)
+      .get('/api/offers')
+      .set('Authorization', `Bearer ${drvTok}`);
+    expect(list.status).toBe(200);
+    expect(list.body.count).toBe(1);
+    expect(list.body.offers[0].status).toBe('rejected');
+  });
+
   // --- Overview ---
 
   test('GET /api/admin/overview returns counts for all entities', async () => {

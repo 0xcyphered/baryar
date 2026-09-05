@@ -7,6 +7,7 @@ const Offer = require('../models/Offer');
 const Shipment = require('../models/Shipment');
 const notificationService = require('./notificationService');
 const cargoService = require('./cargoService');
+const matchingService = require('./matchingService');
 const { EDITABLE_FIELDS } = require('./cargoService');
 const { normalizeIranPhone } = require('../utils/phone');
 
@@ -189,6 +190,11 @@ async function cancelCargoAdmin({ id }) {
   const wasMatched = cargo.status === 'matched';
   cargo.status = 'cancelled';
   await cargo.save();
+
+  // Plan 028: admin cancel must also reject any leftover pending bids so a
+  // cancelled posting never shows live pending work to drivers. Idempotent
+  // (matched cargo normally has none). Notification-free (plan 029).
+  await matchingService.rejectPendingOffersForCargo(cargo._id);
 
   if (wasMatched) {
     // Cancel active shipment for this cargo

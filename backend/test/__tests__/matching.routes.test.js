@@ -168,6 +168,106 @@ describe('matching routes', () => {
     expect(res.body.cargo[0].title).toBe('Light cargo');
   });
 
+  // --- Plan 028: mode / volume / reefer filters ---
+
+  test('vehicleId filter hides sea and air cargo, keeps land cargo', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await createDriverWithVehicle(PHONE_DRIVER);
+
+    await createAndPublishCargo(ownerToken, { title: 'Land cargo', transportMode: 'land' });
+    await createAndPublishCargo(ownerToken, { title: 'Sea cargo', transportMode: 'sea' });
+    await createAndPublishCargo(ownerToken, { title: 'Air cargo', transportMode: 'air' });
+
+    const res = await request(app)
+      .get(`/api/matching/cargo?vehicleId=${vehicleId}`)
+      .set('Authorization', `Bearer ${driverToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.count).toBe(1);
+    expect(res.body.cargo[0].title).toBe('Land cargo');
+  });
+
+  test('vehicleId filter still returns multimodal cargo for a truck', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await createDriverWithVehicle(PHONE_DRIVER);
+
+    await createAndPublishCargo(ownerToken, { title: 'Multimodal cargo', transportMode: 'multimodal' });
+
+    const res = await request(app)
+      .get(`/api/matching/cargo?vehicleId=${vehicleId}`)
+      .set('Authorization', `Bearer ${driverToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.count).toBe(1);
+    expect(res.body.cargo[0].title).toBe('Multimodal cargo');
+  });
+
+  test('vehicleId filter hides refrigerated cargo for a non-reefer truck', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await createDriverWithVehicle(PHONE_DRIVER, {
+      vehicleType: 'truck',
+    });
+
+    await createAndPublishCargo(ownerToken, {
+      title: 'Chilled cargo',
+      specialCharacteristics: ['refrigerated'],
+    });
+
+    const res = await request(app)
+      .get(`/api/matching/cargo?vehicleId=${vehicleId}`)
+      .set('Authorization', `Bearer ${driverToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.count).toBe(0);
+  });
+
+  test('reefer vehicle does receive refrigerated cargo', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await createDriverWithVehicle(PHONE_DRIVER, {
+      vehicleType: 'reefer',
+    });
+
+    await createAndPublishCargo(ownerToken, {
+      title: 'Chilled cargo',
+      specialCharacteristics: ['refrigerated'],
+    });
+
+    const res = await request(app)
+      .get(`/api/matching/cargo?vehicleId=${vehicleId}`)
+      .set('Authorization', `Bearer ${driverToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.count).toBe(1);
+    expect(res.body.cargo[0].title).toBe('Chilled cargo');
+  });
+
+  test('vehicleId filter excludes cargo with volume above vehicle capacity', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await createDriverWithVehicle(PHONE_DRIVER, {
+      capacityVolumeM3: 30,
+    });
+
+    await createAndPublishCargo(ownerToken, { title: 'Fits cargo', dimensions: { weightKg: 10000, volumeM3: 20 } });
+    await createAndPublishCargo(ownerToken, { title: 'Oversize cargo', dimensions: { weightKg: 10000, volumeM3: 50 } });
+
+    const res = await request(app)
+      .get(`/api/matching/cargo?vehicleId=${vehicleId}`)
+      .set('Authorization', `Bearer ${driverToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.count).toBe(1);
+    expect(res.body.cargo[0].title).toBe('Fits cargo');
+  });
+
+  test('without vehicleId, sea cargo is still listed (browse path unchanged)', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken } = await createDriverWithVehicle(PHONE_DRIVER);
+
+    await createAndPublishCargo(ownerToken, { title: 'Sea cargo', transportMode: 'sea' });
+
+    const res = await request(app)
+      .get('/api/matching/cargo')
+      .set('Authorization', `Bearer ${driverToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.count).toBe(1);
+    expect(res.body.cargo[0].title).toBe('Sea cargo');
+  });
+
   test('non-existent vehicleId is not_found', async () => {
     const { token: driverToken } = await createDriverWithVehicle(PHONE_DRIVER);
     const fakeId = '0'.repeat(24);

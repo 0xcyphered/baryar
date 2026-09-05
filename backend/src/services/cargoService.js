@@ -1,5 +1,8 @@
 const mongoose = require('mongoose');
 const Cargo = require('../models/Cargo');
+// matchingService does not require cargoService (it uses shipmentService), so
+// this is not a circular require (checked in plan 028).
+const matchingService = require('./matchingService');
 
 const MAX_LIST = 100;
 const EDITABLE_FIELDS = [
@@ -106,8 +109,14 @@ async function publishCargo({ ownerUserId, id }) {
 async function cancelCargo({ ownerUserId, id }) {
   const cargo = await findOwned({ ownerUserId, id });
   if (cargo.status !== 'draft' && cargo.status !== 'open') fail('invalid_status');
+  const wasOpen = cargo.status === 'open';
   cargo.status = 'cancelled';
   await cargo.save();
+  if (wasOpen) {
+    // Draft cancel has no offers (publish is what makes cargo biddable);
+    // open cancel must not leave driver bids pending forever (plan 028).
+    await matchingService.rejectPendingOffersForCargo(cargo._id);
+  }
   return cargo;
 }
 

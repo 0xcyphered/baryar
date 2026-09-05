@@ -84,6 +84,18 @@ async function listMatchingCargo({ userId, vehicleId, lat, lng, radiusKm }) {
   if (hasValue(vehicleId)) {
     const vehicle = await findOwnedActiveVehicle({ userId, vehicleId });
     query["dimensions.weightKg"] = { $lte: vehicle.capacityWeightKg };
+    query["dimensions.volumeM3"] = { $lte: vehicle.capacityVolumeM3 };
+    // Phase 1 compatibility matrix: Vehicle is a road asset, so it can only
+    // take land/multimodal cargo. sea/air/rail stay hidden whenever a
+    // vehicleId is supplied. No vehicleType equality against cargo — cargo
+    // has no vehicle-type field (plan 013 decision, kept in 028).
+    query.transportMode = { $in: ["land", "multimodal"] };
+    // Reefer rule: refrigerated cargo needs a reefer vehicle. Other specials
+    // (hazardous, fragile, ...) have no matching vehicle class and do not
+    // exclude anything.
+    if (vehicle.vehicleType !== "reefer") {
+      query.specialCharacteristics = { $nin: ["refrigerated"] };
+    }
   }
 
   if (sortByDistance) {
@@ -224,6 +236,19 @@ async function acceptOffer({ userId, offerId }) {
   return { offer: freshOffer, cargo: freshCargo };
 }
 
+// Shared by the cancel paths (cargoService.cancelCargo, adminService
+// cancelCargoAdmin): a cancelled posting must not leave driver bids sitting
+// at pending forever. Reject — not withdraw — because withdraw is the
+// driver's own action; reject is the marketplace telling the driver the
+// job is gone. Idempotent; never touches accepted/withdrawn offers.
+// Notification-free on purpose: plan 029 owns offer_* notification types.
+async function rejectPendingOffersForCargo(cargoId) {
+  await Offer.updateMany(
+    { cargoId, status: "pending" },
+    { status: "rejected" }
+  );
+}
+
 function publicOffer(offer) {
   return {
     id: offer._id.toString(),
@@ -246,5 +271,6 @@ module.exports = {
   withdrawOffer,
   listCargoOffers,
   acceptOffer,
+  rejectPendingOffersForCargo,
   publicOffer,
 };

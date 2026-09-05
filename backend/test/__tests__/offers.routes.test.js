@@ -545,6 +545,34 @@ describe('offers routes', () => {
     expect(patch.body).toEqual({ error: 'invalid_status' });
   });
 
+  // --- Plan 028: owner cancel of open cargo rejects pending offers ---
+
+  test('owner cancel of open cargo rejects the pending bid (not withdrawn)', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'CNCLREJ1IR1');
+    const cargoId = await publishCargo(ownerToken);
+
+    const offerRes = await request(app)
+      .post('/api/offers')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .send({ cargoId, vehicleId, priceRial: 2000000 });
+    expect(offerRes.status).toBe(201);
+    expect(offerRes.body.offer.status).toBe('pending');
+
+    const cancel = await request(app)
+      .post(`/api/cargo/${cargoId}/cancel`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(cancel.status).toBe(200);
+    expect(cancel.body.cargo.status).toBe('cancelled');
+
+    const list = await request(app)
+      .get('/api/offers')
+      .set('Authorization', `Bearer ${driverToken}`);
+    expect(list.status).toBe(200);
+    expect(list.body.count).toBe(1);
+    expect(list.body.offers[0].status).toBe('rejected');
+  });
+
   test('unknown /api/offers routes fall through to 404', async () => {
     const { token: driverToken } = await setupDriverWithVehicle(PHONE_DRIVER, 'NOPEOF1IR1');
     const res = await request(app)
