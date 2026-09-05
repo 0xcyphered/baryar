@@ -123,6 +123,7 @@ function publicNotification(notification) {
 }
 
 module.exports = {
+  deliver,
   notifyEvent,
   notifyShipment,
   notifyOfferReceived,

@@ -1,41 +1,25 @@
 require('../setup');
 const request = require('supertest');
 const { createApp } = require('../../src/app');
-const User = require('../../src/models/User');
+const { applyTestEnv, makeHelpers, cargoBody } = require('../helpers');
 
 const PHONE_OWNER = '09121230101';
 const PHONE_DRIVER = '09121230102';
-const canon = (phone) => `+98${phone.slice(1)}`;
-const FIXED_CODE = '123456';
 
 describe('matching routes', () => {
   const app = createApp();
+  const h = makeHelpers(app);
 
   beforeAll(() => {
-    process.env.JWT_SECRET = 'test-secret-do-not-use';
-    process.env.OTP_FIXED_CODE = FIXED_CODE;
-    process.env.NODE_ENV = 'test';
+    applyTestEnv();
   });
 
-  async function register(phone) {
-    await request(app).post('/api/auth/request-otp').send({ phone });
-    const res = await request(app).post('/api/auth/verify-otp').send({ phone, code: FIXED_CODE });
-    expect(res.status).toBe(200);
-    return { token: res.body.token, userId: res.body.user.id };
-  }
-
-  async function registerDriverViaProfile(phone) {
-    const { token, userId } = await register(phone);
-    const res = await request(app)
-      .post('/api/driver/profile')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ licenseNumber: 'L-MATCH-001' });
-    expect([200, 201]).toContain(res.status);
-    return { token, userId };
+  function openCargoBody(overrides = {}) {
+    return cargoBody({ title: 'Matching test cargo', ...overrides });
   }
 
   async function createDriverWithVehicle(phone, vehicleOverrides = {}) {
-    const { token } = await registerDriverViaProfile(phone);
+    const { token } = await h.registerDriverViaProfile(phone);
     const plate = `M${phone.slice(-5)}IR11`;
     const res = await request(app)
       .post('/api/driver/vehicles')
@@ -50,20 +34,6 @@ describe('matching routes', () => {
       });
     expect(res.status).toBe(201);
     return { token, vehicleId: res.body.vehicle.id };
-  }
-
-  function openCargoBody(overrides = {}) {
-    return {
-      title: 'Matching test cargo',
-      transportMode: 'land',
-      origin: { address: 'Tehran', location: { coordinates: [51.39, 35.69] } },
-      destination: { address: 'Isfahan', location: { coordinates: [51.68, 32.65] } },
-      dimensions: { weightKg: 10000, volumeM3: 20 },
-      specialCharacteristics: [],
-      pickupAt: '2026-09-10T08:00:00.000Z',
-      deliverBy: '2026-09-12T18:00:00.000Z',
-      ...overrides,
-    };
   }
 
   async function createAndPublishCargo(ownerToken, overrides = {}) {
@@ -89,7 +59,7 @@ describe('matching routes', () => {
   });
 
   test('GET /api/matching/cargo with cargo_owner is 403', async () => {
-    const { token } = await register(PHONE_OWNER);
+    const { token } = await h.register(PHONE_OWNER);
     const res = await request(app)
       .get('/api/matching/cargo')
       .set('Authorization', `Bearer ${token}`);
@@ -98,7 +68,7 @@ describe('matching routes', () => {
   });
 
   test('GET /api/matching/cargo with driver token returns 200', async () => {
-    const { token } = await registerDriverViaProfile(PHONE_DRIVER);
+    const { token } = await h.registerDriverViaProfile(PHONE_DRIVER);
     const res = await request(app)
       .get('/api/matching/cargo')
       .set('Authorization', `Bearer ${token}`);
@@ -111,7 +81,7 @@ describe('matching routes', () => {
   // --- Success path: listing open cargo ---
 
   test('lists open cargo owned by another user, sorted newest-first', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
     const { token: driverToken } = await createDriverWithVehicle(PHONE_DRIVER);
 
     const id1 = await createAndPublishCargo(ownerToken, { title: 'First cargo' });
@@ -132,8 +102,8 @@ describe('matching routes', () => {
   });
 
   test('only shows open cargo — draft and cancelled are hidden', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken } = await registerDriverViaProfile(PHONE_DRIVER);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken } = await h.registerDriverViaProfile(PHONE_DRIVER);
 
     await createAndPublishCargo(ownerToken, { title: 'Visible' });
     await request(app)
@@ -152,7 +122,7 @@ describe('matching routes', () => {
   // --- Vehicle filter ---
 
   test('vehicleId filter excludes cargo heavier than vehicle capacity', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
     const { token: driverToken, vehicleId } = await createDriverWithVehicle(PHONE_DRIVER, {
       capacityWeightKg: 5000,
     });
@@ -171,7 +141,7 @@ describe('matching routes', () => {
   // --- Plan 028: mode / volume / reefer filters ---
 
   test('vehicleId filter hides sea and air cargo, keeps land cargo', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
     const { token: driverToken, vehicleId } = await createDriverWithVehicle(PHONE_DRIVER);
 
     await createAndPublishCargo(ownerToken, { title: 'Land cargo', transportMode: 'land' });
@@ -187,7 +157,7 @@ describe('matching routes', () => {
   });
 
   test('vehicleId filter still returns multimodal cargo for a truck', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
     const { token: driverToken, vehicleId } = await createDriverWithVehicle(PHONE_DRIVER);
 
     await createAndPublishCargo(ownerToken, { title: 'Multimodal cargo', transportMode: 'multimodal' });
@@ -201,7 +171,7 @@ describe('matching routes', () => {
   });
 
   test('vehicleId filter hides refrigerated cargo for a non-reefer truck', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
     const { token: driverToken, vehicleId } = await createDriverWithVehicle(PHONE_DRIVER, {
       vehicleType: 'truck',
     });
@@ -219,7 +189,7 @@ describe('matching routes', () => {
   });
 
   test('reefer vehicle does receive refrigerated cargo', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
     const { token: driverToken, vehicleId } = await createDriverWithVehicle(PHONE_DRIVER, {
       vehicleType: 'reefer',
     });
@@ -238,7 +208,7 @@ describe('matching routes', () => {
   });
 
   test('vehicleId filter excludes cargo with volume above vehicle capacity', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
     const { token: driverToken, vehicleId } = await createDriverWithVehicle(PHONE_DRIVER, {
       capacityVolumeM3: 30,
     });
@@ -255,7 +225,7 @@ describe('matching routes', () => {
   });
 
   test('without vehicleId, sea cargo is still listed (browse path unchanged)', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
     const { token: driverToken } = await createDriverWithVehicle(PHONE_DRIVER);
 
     await createAndPublishCargo(ownerToken, { title: 'Sea cargo', transportMode: 'sea' });
@@ -290,7 +260,7 @@ describe('matching routes', () => {
   // --- Location / radius filter ---
 
   test('lat/lng/radius returns only nearby open cargo', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
     const { token: driverToken } = await createDriverWithVehicle(PHONE_DRIVER);
 
     await createAndPublishCargo(ownerToken, { title: 'Tehran cargo' });
@@ -334,7 +304,7 @@ describe('matching routes', () => {
   // --- Inactive vehicle ---
 
   test('using an inactive vehicleId is validation_error', async () => {
-    const { token } = await registerDriverViaProfile(PHONE_DRIVER);
+    const { token } = await h.registerDriverViaProfile(PHONE_DRIVER);
     const vRes = await request(app)
       .post('/api/driver/vehicles')
       .set('Authorization', `Bearer ${token}`)
@@ -354,7 +324,7 @@ describe('matching routes', () => {
   });
 
   test('unknown /api/matching routes fall through to 404', async () => {
-    const { token: driverToken } = await registerDriverViaProfile(PHONE_DRIVER);
+    const { token: driverToken } = await h.registerDriverViaProfile(PHONE_DRIVER);
     const res = await request(app)
       .get('/api/matching/nope')
       .set('Authorization', `Bearer ${driverToken}`);

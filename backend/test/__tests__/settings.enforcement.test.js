@@ -1,8 +1,7 @@
 require('../setup');
 const request = require('supertest');
 const { createApp } = require('../../src/app');
-const User = require('../../src/models/User');
-const jwt = require('jsonwebtoken');
+const { applyTestEnv, makeHelpers } = require('../helpers');
 
 // Plan 029 Step 6 cases 5 + 6: settings enforcement —
 //   maxActiveCargoPerOwner 409 cap on POST /api/cargo
@@ -10,38 +9,16 @@ const jwt = require('jsonwebtoken');
 
 const PHONE_OWNER = '09121230701';
 const PHONE_ADMIN = '09121230709';
-const canon = (phone) => `+98${phone.slice(1)}`;
-const FIXED_CODE = '123456';
-const JWT_SECRET = 'test-secret-do-not-use';
-
 describe('settings enforcement (plan 029)', () => {
   const app = createApp();
+  const h = makeHelpers(app);
 
   beforeAll(() => {
-    process.env.JWT_SECRET = JWT_SECRET;
-    process.env.OTP_FIXED_CODE = FIXED_CODE;
-    process.env.NODE_ENV = 'test';
+    applyTestEnv();
   });
 
-  async function register(phone) {
-    await request(app).post('/api/auth/request-otp').send({ phone });
-    const res = await request(app).post('/api/auth/verify-otp').send({ phone, code: FIXED_CODE });
-    expect(res.status).toBe(200);
-    return { token: res.body.token, userId: res.body.user.id };
-  }
 
-  // Same mint pattern as admin.routes.test.js: direct User.create with the
-  // admin role + a locally-signed JWT (no ADMIN_BOOTSTRAP_PHONES dependency).
-  async function createAdmin() {
-    const user = await User.create({
-      phone: canon(PHONE_ADMIN),
-      roles: ['admin'],
-      phoneVerifiedAt: new Date(),
-      status: 'active',
-    });
-    const token = jwt.sign({ sub: user._id.toString(), phone: canon(PHONE_ADMIN) }, JWT_SECRET, { expiresIn: '7d' });
-    return { token, userId: user._id.toString() };
-  }
+
 
   function validCargoBody(overrides = {}) {
     return {
@@ -67,8 +44,8 @@ describe('settings enforcement (plan 029)', () => {
   // --- Case 5: maxActiveCargoPerOwner cap ---
 
   test('cargo_limit 409 at cap; cancel frees a slot; cap 0 is strict', async () => {
-    const { token: adminToken } = await createAdmin();
-    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: adminToken } = await h.createAdmin(PHONE_ADMIN);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
 
     const put = await request(app)
       .put('/api/admin/settings')
@@ -84,7 +61,7 @@ describe('settings enforcement (plan 029)', () => {
     expect(second.body).toEqual({ error: 'cargo_limit' });
 
     // Another owner is not affected (cap is per owner).
-    const { token: otherToken } = await register('09121230702');
+    const { token: otherToken } = await h.register('09121230702');
     const other = await createCargo(otherToken, { title: 'Other owner ok' });
     expect(other.status).toBe(201);
 
@@ -118,8 +95,8 @@ describe('settings enforcement (plan 029)', () => {
   // --- Case 6: maintenanceMode 503 ---
 
   test('maintenance 503 on owner writes; GET and auth stay up; admin bypasses', async () => {
-    const { token: adminToken, userId: adminId } = await createAdmin();
-    const { token: ownerToken, userId: ownerId } = await register(PHONE_OWNER);
+    const { token: adminToken, userId: adminId } = await h.createAdmin(PHONE_ADMIN);
+    const { token: ownerToken, userId: ownerId } = await h.register(PHONE_OWNER);
 
     const on = await request(app)
       .put('/api/admin/settings')

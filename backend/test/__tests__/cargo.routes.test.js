@@ -2,28 +2,19 @@ require('../setup');
 const request = require('supertest');
 const { createApp } = require('../../src/app');
 const User = require('../../src/models/User');
+const { applyTestEnv, FIXED_CODE, canon, makeHelpers } = require('../helpers');
 
 const PHONE_OWNER = '09121230001'; // canonical +989****0001
 const PHONE_OTHER = '09121230002'; // canonical +989****0002
 const PHONE_DRIVER = '09121230003'; // roles: ['driver']
-const canon = (phone) => `+98${phone.slice(1)}`;
-const FIXED_CODE = '123456';
-
 describe('cargo draft CRUD', () => {
   const app = createApp();
+  const h = makeHelpers(app);
 
   beforeAll(() => {
-    process.env.JWT_SECRET = 'test-secret-do-not-use';
-    process.env.OTP_FIXED_CODE = FIXED_CODE;
-    process.env.NODE_ENV = 'test';
+    applyTestEnv();
   });
 
-  async function register(phone) {
-    await request(app).post('/api/auth/request-otp').send({ phone });
-    const res = await request(app).post('/api/auth/verify-otp').send({ phone, code: FIXED_CODE });
-    expect(res.status).toBe(200);
-    return { token: res.body.token, userId: res.body.user.id };
-  }
 
   async function registerDriver(phone) {
     await User.create({ phone: canon(phone), roles: ['driver'] });
@@ -55,7 +46,7 @@ describe('cargo draft CRUD', () => {
   }
 
   test('1. POST /api/cargo creates a draft owned by the token user', async () => {
-    const { token, userId } = await register(PHONE_OWNER);
+    const { token, userId } = await h.register(PHONE_OWNER);
     const res = await createCargo(token);
     expect(res.status).toBe(201);
     expect(res.body.cargo.status).toBe('draft');
@@ -66,7 +57,7 @@ describe('cargo draft CRUD', () => {
   });
 
   test('2. POST ignores smuggled status and ownerUserId — owner always from the token', async () => {
-    const { token, userId } = await register(PHONE_OWNER);
+    const { token, userId } = await h.register(PHONE_OWNER);
     const res = await createCargo(token, { status: 'open', ownerUserId: 'f'.repeat(24) });
     expect(res.status).toBe(201);
     expect(res.body.cargo.status).toBe('draft');
@@ -74,7 +65,7 @@ describe('cargo draft CRUD', () => {
   });
 
   test('3. POST without origin (or destination) is validation_error', async () => {
-    const { token } = await register(PHONE_OWNER);
+    const { token } = await h.register(PHONE_OWNER);
     const noOrigin = validCargoBody();
     delete noOrigin.origin;
     const res1 = await request(app)
@@ -95,7 +86,7 @@ describe('cargo draft CRUD', () => {
   });
 
   test('4. POST rejects bad transportMode, bad specialCharacteristics, and bad coordinates', async () => {
-    const { token } = await register(PHONE_OWNER);
+    const { token } = await h.register(PHONE_OWNER);
 
     const badMode = await createCargo(token, { transportMode: 'spaceship' });
     expect(badMode.status).toBe(400);
@@ -113,7 +104,7 @@ describe('cargo draft CRUD', () => {
   });
 
   test('5. POST with deliverBy before pickupAt is validation_error', async () => {
-    const { token } = await register(PHONE_OWNER);
+    const { token } = await h.register(PHONE_OWNER);
     const res = await createCargo(token, {
       pickupAt: '2026-09-12T18:00:00.000Z',
       deliverBy: '2026-09-10T08:00:00.000Z',
@@ -123,7 +114,7 @@ describe('cargo draft CRUD', () => {
   });
 
   test('6. GET /api/cargo lists own cargoes newest first with a count', async () => {
-    const { token, userId } = await register(PHONE_OWNER);
+    const { token, userId } = await h.register(PHONE_OWNER);
     const first = await createCargo(token, { title: 'First load' });
     expect(first.status).toBe(201);
     await new Promise((resolve) => setTimeout(resolve, 5)); // distinct createdAt
@@ -142,7 +133,7 @@ describe('cargo draft CRUD', () => {
   });
 
   test('7. GET /api/cargo?status=open filters own published cargo; bogus status is validation_error', async () => {
-    const { token } = await register(PHONE_OWNER);
+    const { token } = await h.register(PHONE_OWNER);
     const draft = await createCargo(token, { title: 'Stays draft' });
     const published = await createCargo(token, { title: 'Gets published' });
     const pub = await request(app)
@@ -162,8 +153,8 @@ describe('cargo draft CRUD', () => {
   });
 
   test('8. GET /api/cargo/:id — own 200, other owner 404, malformed id 400, missing id 404', async () => {
-    const owner = await register(PHONE_OWNER);
-    const other = await register(PHONE_OTHER);
+    const owner = await h.register(PHONE_OWNER);
+    const other = await h.register(PHONE_OTHER);
     const created = await createCargo(owner.token);
     const id = created.body.cargo.id;
 
@@ -189,7 +180,7 @@ describe('cargo draft CRUD', () => {
   });
 
   test('9. PATCH own draft updates fields and stays draft', async () => {
-    const { token } = await register(PHONE_OWNER);
+    const { token } = await h.register(PHONE_OWNER);
     const created = await createCargo(token);
     const id = created.body.cargo.id;
 
@@ -208,7 +199,7 @@ describe('cargo draft CRUD', () => {
   });
 
   test('10. PATCH and DELETE are invalid_status after publish', async () => {
-    const { token } = await register(PHONE_OWNER);
+    const { token } = await h.register(PHONE_OWNER);
     const created = await createCargo(token);
     const id = created.body.cargo.id;
     const pub = await request(app).post(`/api/cargo/${id}/publish`).set('Authorization', `Bearer ${token}`);
@@ -227,8 +218,8 @@ describe('cargo draft CRUD', () => {
   });
 
   test('11. PATCH another owner’s draft is not_found', async () => {
-    const owner = await register(PHONE_OWNER);
-    const other = await register(PHONE_OTHER);
+    const owner = await h.register(PHONE_OWNER);
+    const other = await h.register(PHONE_OTHER);
     const created = await createCargo(owner.token);
 
     const res = await request(app)
@@ -240,7 +231,7 @@ describe('cargo draft CRUD', () => {
   });
 
   test('12. DELETE own draft removes it; subsequent GET is 404', async () => {
-    const { token } = await register(PHONE_OWNER);
+    const { token } = await h.register(PHONE_OWNER);
     const created = await createCargo(token);
     const id = created.body.cargo.id;
 
@@ -254,7 +245,7 @@ describe('cargo draft CRUD', () => {
   });
 
   test('13. publish flips draft → open; publishing again is invalid_status', async () => {
-    const { token } = await register(PHONE_OWNER);
+    const { token } = await h.register(PHONE_OWNER);
     const created = await createCargo(token);
     const id = created.body.cargo.id;
 
@@ -268,7 +259,7 @@ describe('cargo draft CRUD', () => {
   });
 
   test('14. cancel works from draft and open; cancelled cannot be cancelled again', async () => {
-    const { token } = await register(PHONE_OWNER);
+    const { token } = await h.register(PHONE_OWNER);
 
     const draft = await createCargo(token, { title: 'Cancel from draft' });
     const cancelDraft = await request(app)
@@ -308,7 +299,7 @@ describe('cargo draft CRUD', () => {
   });
 
   test('16b. driver-only user is forbidden on GET /api/cargo/:id too (037 did not punch a hole in owner CRUD)', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
     const created = await createCargo(ownerToken);
     const driverToken = await registerDriver(PHONE_DRIVER);
     const res = await request(app)

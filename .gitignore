@@ -32,3 +32,6 @@ dist-ssr
 # Local document uploads (plan 030)
 backend/uploads/
 
+# Jest coverage output (plan 039)
+backend/coverage/
+

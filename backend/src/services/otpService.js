@@ -118,4 +118,4 @@ async function verifyOtp({ phone: rawPhone, code }) {
   return { user, token };
 }
 
-module.exports = { requestOtp, verifyOtp };
+module.exports = { sendOtp, requestOtp, verifyOtp };

@@ -2,106 +2,31 @@ require('../setup');
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const { createApp } = require('../../src/app');
-const Cargo = require('../../src/models/Cargo');
 const Offer = require('../../src/models/Offer');
 const User = require('../../src/models/User');
+const { applyTestEnv, FIXED_CODE, JWT_SECRET, canon, makeHelpers, cargoBody } = require('../helpers');
 
 const PHONE_OWNER = '09121230201';
 const PHONE_OWNER2 = '09121230202';
 const PHONE_DRIVER = '09121230203';
 const PHONE_DRIVER2 = '09121230204';
 const PHONE_PURE_DRIVER = '09121230205';
-const canon = (phone) => `+98${phone.slice(1)}`;
-const FIXED_CODE = '123456';
-const JWT_SECRET = 'test-secret-do-not-use';
 
 describe('offers routes', () => {
   const app = createApp();
+  const h = makeHelpers(app);
 
   beforeAll(() => {
-    process.env.JWT_SECRET = JWT_SECRET;
-    process.env.OTP_FIXED_CODE = FIXED_CODE;
-    process.env.NODE_ENV = 'test';
+    applyTestEnv();
   });
 
-  async function register(phone) {
-    await request(app).post('/api/auth/request-otp').send({ phone });
-    const res = await request(app).post('/api/auth/verify-otp').send({ phone, code: FIXED_CODE });
-    expect(res.status).toBe(200);
-    return { token: res.body.token, userId: res.body.user.id };
-  }
-
-  async function registerDriverViaProfile(phone) {
-    const { token, userId } = await register(phone);
-    const res = await request(app)
-      .post('/api/driver/profile')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ licenseNumber: 'L-OFFER-001' });
-    expect([200, 201]).toContain(res.status);
-    return { token, userId };
-  }
-
-  // Create a user with ONLY the driver role (no cargo_owner) for role isolation tests
+  // Keep local: returns a factory (differs from helpers.makeDriverOnlyToken)
   function makeDriverOnlyToken(phone) {
     return async () => {
       const user = await User.create({ phone: canon(phone), roles: ['driver'], phoneVerifiedAt: new Date() });
       const token = jwt.sign({ sub: user._id.toString(), phone: canon(phone) }, JWT_SECRET, { expiresIn: '7d' });
       return { token, userId: user._id.toString() };
     };
-  }
-
-  async function createVehicle(token, overrides = {}) {
-    const plate = overrides.plate || `O${Date.now()}IR11`;
-    const res = await request(app)
-      .post('/api/driver/vehicles')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        vehicleType: 'truck',
-        plate,
-        capacityWeightKg: 30000,
-        capacityVolumeM3: 60,
-        year: 1400,
-        ...overrides,
-      });
-    expect(res.status).toBe(201);
-    return res.body.vehicle.id;
-  }
-
-  function openCargoBody(overrides = {}) {
-    return {
-      title: 'Offer test cargo',
-      transportMode: 'land',
-      origin: { address: 'Tehran', location: { coordinates: [51.39, 35.69] } },
-      destination: { address: 'Isfahan', location: { coordinates: [51.68, 32.65] } },
-      dimensions: { weightKg: 10000, volumeM3: 20 },
-      specialCharacteristics: [],
-      pickupAt: '2026-09-10T08:00:00.000Z',
-      deliverBy: '2026-09-12T18:00:00.000Z',
-      ...overrides,
-    };
-  }
-
-  async function publishCargo(ownerToken, overrides = {}) {
-    const createRes = await request(app)
-      .post('/api/cargo')
-      .set('Authorization', `Bearer ${ownerToken}`)
-      .send(openCargoBody(overrides));
-    expect(createRes.status).toBe(201);
-    const id = createRes.body.cargo.id;
-    const pub = await request(app)
-      .post(`/api/cargo/${id}/publish`)
-      .set('Authorization', `Bearer ${ownerToken}`);
-    expect(pub.status).toBe(200);
-    return id;
-  }
-
-  async function setupDriverWithVehicle(phone, plateOrOverrides) {
-    const { token } = await registerDriverViaProfile(phone);
-    const overrides = typeof plateOrOverrides === 'string'
-      ? { plate: plateOrOverrides }
-      : (plateOrOverrides || {});
-    const vehicleId = await createVehicle(token, overrides);
-    return { token, vehicleId };
   }
 
   // --- Auth ---
@@ -113,7 +38,7 @@ describe('offers routes', () => {
   });
 
   test('POST /api/offers with cargo_owner (no driver role) is 403', async () => {
-    const { token } = await register(PHONE_OWNER);
+    const { token } = await h.register(PHONE_OWNER);
     const res = await request(app)
       .post('/api/offers')
       .set('Authorization', `Bearer ${token}`)
@@ -125,9 +50,9 @@ describe('offers routes', () => {
   // --- Create offer ---
 
   test('POST /api/offers creates a pending offer for a driver', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'CREATE1IR11');
-    const cargoId = await publishCargo(ownerToken);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'CREATE1IR11');
+    const cargoId = await h.publishCargo(ownerToken);
 
     const res = await request(app)
       .post('/api/offers')
@@ -142,7 +67,7 @@ describe('offers routes', () => {
   });
 
   test('POST /api/offers with invalid cargoId is invalid_cargo_id', async () => {
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'BADCRG1IR11');
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'BADCRG1IR11');
     const res = await request(app)
       .post('/api/offers')
       .set('Authorization', `Bearer ${driverToken}`)
@@ -152,9 +77,9 @@ describe('offers routes', () => {
   });
 
   test('POST /api/offers with invalid vehicleId is invalid_vehicle_id', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken } = await setupDriverWithVehicle(PHONE_DRIVER, 'BADVEH1IR11');
-    const cargoId = await publishCargo(ownerToken);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'BADVEH1IR11');
+    const cargoId = await h.publishCargo(ownerToken);
     const res = await request(app)
       .post('/api/offers')
       .set('Authorization', `Bearer ${driverToken}`)
@@ -164,12 +89,12 @@ describe('offers routes', () => {
   });
 
   test('POST /api/offers with non-open cargo is invalid_status', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'CLOSED1IR11');
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'CLOSED1IR11');
     const createRes = await request(app)
       .post('/api/cargo')
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send(openCargoBody({ title: 'Draft cargo' }));
+      .send(cargoBody({ title: 'Draft cargo' }));
     const draftId = createRes.body.cargo.id;
 
     const res = await request(app)
@@ -181,9 +106,9 @@ describe('offers routes', () => {
   });
 
   test('POST /api/offers without priceRial is validation_error', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'NOPRCE1IR11');
-    const cargoId = await publishCargo(ownerToken);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'NOPRCE1IR11');
+    const cargoId = await h.publishCargo(ownerToken);
     const res = await request(app)
       .post('/api/offers')
       .set('Authorization', `Bearer ${driverToken}`)
@@ -193,9 +118,9 @@ describe('offers routes', () => {
   });
 
   test('POST /api/offers duplicate offer for same cargo is offer_exists', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'DUP111IR11');
-    const cargoId = await publishCargo(ownerToken);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'DUP111IR11');
+    const cargoId = await h.publishCargo(ownerToken);
 
     const first = await request(app)
       .post('/api/offers')
@@ -212,10 +137,10 @@ describe('offers routes', () => {
   });
 
   test('POST /api/offers with foreign vehicle is not_found', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken } = await setupDriverWithVehicle(PHONE_DRIVER, 'FRGNV1IR11');
-    const other = await setupDriverWithVehicle(PHONE_DRIVER2, 'OTHER1IR11');
-    const cargoId = await publishCargo(ownerToken);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'FRGNV1IR11');
+    const other = await h.setupDriverWithVehicle(PHONE_DRIVER2, 'OTHER1IR11');
+    const cargoId = await h.publishCargo(ownerToken);
 
     const res = await request(app)
       .post('/api/offers')
@@ -228,9 +153,9 @@ describe('offers routes', () => {
   // --- Plan 036: eligibility on create (vehicleFitsCargo) ---
 
   test('POST /api/offers on sea cargo with a truck is validation_error', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'SEAREJ1IR1');
-    const cargoId = await publishCargo(ownerToken, { title: 'Sea cargo', transportMode: 'sea' });
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'SEAREJ1IR1');
+    const cargoId = await h.publishCargo(ownerToken, { title: 'Sea cargo', transportMode: 'sea' });
 
     const res = await request(app)
       .post('/api/offers')
@@ -242,9 +167,9 @@ describe('offers routes', () => {
   });
 
   test('POST /api/offers on air cargo with a truck is validation_error', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'AIRREJ1IR1');
-    const cargoId = await publishCargo(ownerToken, { title: 'Air cargo', transportMode: 'air' });
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'AIRREJ1IR1');
+    const cargoId = await h.publishCargo(ownerToken, { title: 'Air cargo', transportMode: 'air' });
 
     const res = await request(app)
       .post('/api/offers')
@@ -256,9 +181,9 @@ describe('offers routes', () => {
   });
 
   test('POST /api/offers on multimodal cargo with a truck succeeds', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'MULTIM1IR1');
-    const cargoId = await publishCargo(ownerToken, { title: 'Multimodal cargo', transportMode: 'multimodal' });
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'MULTIM1IR1');
+    const cargoId = await h.publishCargo(ownerToken, { title: 'Multimodal cargo', transportMode: 'multimodal' });
 
     const res = await request(app)
       .post('/api/offers')
@@ -269,12 +194,12 @@ describe('offers routes', () => {
   });
 
   test('POST /api/offers above weight capacity is validation_error', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, {
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, {
       plate: 'WTREJ1IR11',
       capacityWeightKg: 5000,
     });
-    const cargoId = await publishCargo(ownerToken, {
+    const cargoId = await h.publishCargo(ownerToken, {
       title: 'Heavy cargo',
       dimensions: { weightKg: 8000, volumeM3: 10 },
     });
@@ -289,12 +214,12 @@ describe('offers routes', () => {
   });
 
   test('POST /api/offers above volume capacity is validation_error', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, {
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, {
       plate: 'VOLREJ1IR1',
       capacityVolumeM3: 10,
     });
-    const cargoId = await publishCargo(ownerToken, {
+    const cargoId = await h.publishCargo(ownerToken, {
       title: 'Bulky cargo',
       dimensions: { weightKg: 1000, volumeM3: 50 },
     });
@@ -309,9 +234,9 @@ describe('offers routes', () => {
   });
 
   test('POST /api/offers on refrigerated cargo with a dry truck is validation_error', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'DRYRFR1IR1');
-    const cargoId = await publishCargo(ownerToken, {
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'DRYRFR1IR1');
+    const cargoId = await h.publishCargo(ownerToken, {
       title: 'Chilled cargo',
       specialCharacteristics: ['refrigerated'],
     });
@@ -326,12 +251,12 @@ describe('offers routes', () => {
   });
 
   test('POST /api/offers on refrigerated cargo with a reefer succeeds', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, {
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, {
       plate: 'REEFER1IR11',
       vehicleType: 'reefer',
     });
-    const cargoId = await publishCargo(ownerToken, {
+    const cargoId = await h.publishCargo(ownerToken, {
       title: 'Chilled cargo',
       specialCharacteristics: ['refrigerated'],
     });
@@ -347,9 +272,9 @@ describe('offers routes', () => {
   // --- List my offers (driver) ---
 
   test('GET /api/offers lists own offers as driver', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'LIST11IR11');
-    const cargoId = await publishCargo(ownerToken);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'LIST11IR11');
+    const cargoId = await h.publishCargo(ownerToken);
 
     await request(app)
       .post('/api/offers')
@@ -366,7 +291,7 @@ describe('offers routes', () => {
   });
 
   test('GET /api/offers with cargo_owner (no driver role) is 403', async () => {
-    const { token } = await register(PHONE_OWNER);
+    const { token } = await h.register(PHONE_OWNER);
     const res = await request(app)
       .get('/api/offers')
       .set('Authorization', `Bearer ${token}`);
@@ -377,9 +302,9 @@ describe('offers routes', () => {
   // --- List offers for cargo (owner) ---
 
   test('GET /api/offers/cargo/:cargoId/offers lists offers for own cargo', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'OWNRLIST1');
-    const cargoId = await publishCargo(ownerToken, { title: 'Offers for this' });
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'OWNRLIST1');
+    const cargoId = await h.publishCargo(ownerToken, { title: 'Offers for this' });
 
     await request(app)
       .post('/api/offers')
@@ -395,9 +320,9 @@ describe('offers routes', () => {
   });
 
   test('GET /api/offers/cargo/:cargoId/offers for foreign cargo is not_found', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: otherToken } = await register(PHONE_OWNER2);
-    const cargoId = await publishCargo(ownerToken);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: otherToken } = await h.register(PHONE_OWNER2);
+    const cargoId = await h.publishCargo(ownerToken);
 
     const res = await request(app)
       .get(`/api/offers/cargo/${cargoId}/offers`)
@@ -407,16 +332,16 @@ describe('offers routes', () => {
   });
 
   test('GET /api/offers/cargo/:cargoId/offers with driver-only user is 403', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'DROFFR1IR1');
-    const cargoId = await publishCargo(ownerToken);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'DROFFR1IR1');
+    const cargoId = await h.publishCargo(ownerToken);
     await request(app)
       .post('/api/offers')
       .set('Authorization', `Bearer ${driverToken}`)
       .send({ cargoId, vehicleId, priceRial: 1000000 });
 
     // Use a pure driver (no cargo_owner role) via JWT
-    const pureDriver = await makeDriverOnlyToken(PHONE_PURE_DRIVER);
+    const pureDriver = await makeDriverOnlyToken('09121230299');
     const { token: pureDriverToken } = await pureDriver();
 
     const res = await request(app)
@@ -429,9 +354,9 @@ describe('offers routes', () => {
   // --- Update offer (PATCH) ---
 
   test('PATCH /api/offers/:id updates price and note of own pending offer', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'PATCH1IR11');
-    const cargoId = await publishCargo(ownerToken);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'PATCH1IR11');
+    const cargoId = await h.publishCargo(ownerToken);
 
     const createRes = await request(app)
       .post('/api/offers')
@@ -451,7 +376,7 @@ describe('offers routes', () => {
   });
 
   test('PATCH /api/offers/:id on non-existent offer is not_found', async () => {
-    const { token: driverToken } = await setupDriverWithVehicle(PHONE_DRIVER, 'NOFND1IR11');
+    const { token: driverToken } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'NOFND1IR11');
     const res = await request(app)
       .patch(`/api/offers/${'0'.repeat(24)}`)
       .set('Authorization', `Bearer ${driverToken}`)
@@ -461,10 +386,10 @@ describe('offers routes', () => {
   });
 
   test('PATCH /api/offers/:id on foreign offer is not_found', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'FOREIGN11I');
-    const other = await setupDriverWithVehicle(PHONE_DRIVER2, 'FOREIGN22I');
-    const cargoId = await publishCargo(ownerToken);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'FOREIGN11I');
+    const other = await h.setupDriverWithVehicle(PHONE_DRIVER2, 'FOREIGN22I');
+    const cargoId = await h.publishCargo(ownerToken);
 
     const created = await request(app)
       .post('/api/offers')
@@ -481,7 +406,7 @@ describe('offers routes', () => {
   });
 
   test('PATCH /api/offers/:id with invalid offerId is invalid_offer_id', async () => {
-    const { token: driverToken } = await setupDriverWithVehicle(PHONE_DRIVER, 'INVOF1IR11');
+    const { token: driverToken } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'INVOF1IR11');
     const res = await request(app)
       .patch('/api/offers/not-a-mongo-id')
       .set('Authorization', `Bearer ${driverToken}`)
@@ -493,9 +418,9 @@ describe('offers routes', () => {
   // --- Withdraw offer (DELETE) ---
 
   test('DELETE /api/offers/:id withdraws a pending offer', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'WITHDR1IR1');
-    const cargoId = await publishCargo(ownerToken);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'WITHDR1IR1');
+    const cargoId = await h.publishCargo(ownerToken);
 
     const created = await request(app)
       .post('/api/offers')
@@ -516,7 +441,7 @@ describe('offers routes', () => {
   });
 
   test('DELETE /api/offers/:id on non-existent is not_found', async () => {
-    const { token: driverToken } = await setupDriverWithVehicle(PHONE_DRIVER, 'DELNOF1IR1');
+    const { token: driverToken } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'DELNOF1IR1');
     const res = await request(app)
       .delete(`/api/offers/${'0'.repeat(24)}`)
       .set('Authorization', `Bearer ${driverToken}`);
@@ -525,10 +450,10 @@ describe('offers routes', () => {
   });
 
   test('DELETE /api/offers/:id on foreign offer is not_found', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'DELFRG1IR1');
-    const other = await setupDriverWithVehicle(PHONE_DRIVER2, 'DELFRG2IR1');
-    const cargoId = await publishCargo(ownerToken);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'DELFRG1IR1');
+    const other = await h.setupDriverWithVehicle(PHONE_DRIVER2, 'DELFRG2IR1');
+    const cargoId = await h.publishCargo(ownerToken);
 
     const created = await request(app)
       .post('/api/offers')
@@ -545,9 +470,9 @@ describe('offers routes', () => {
   // --- Accept / award offer (cargo owner) ---
 
   test('POST /api/offers/:id/accept awards the offer — cargo becomes matched, shipment created', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'AWARD1IR11');
-    const cargoId = await publishCargo(ownerToken);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'AWARD1IR11');
+    const cargoId = await h.publishCargo(ownerToken);
 
     const offerRes = await request(app)
       .post('/api/offers')
@@ -571,10 +496,9 @@ describe('offers routes', () => {
   });
 
   test('POST /api/offers/:id/accept from driver-only user is 403', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'ACCDRV1IR1');
-    const cargoId = await publishCargo(ownerToken);
-
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'ACCDRV1IR1');
+    const cargoId = await h.publishCargo(ownerToken);
     const offerRes = await request(app)
       .post('/api/offers')
       .set('Authorization', `Bearer ${driverToken}`)
@@ -591,7 +515,7 @@ describe('offers routes', () => {
   });
 
   test('POST /api/offers/:id/accept for non-existent offer is not_found', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
     const res = await request(app)
       .post(`/api/offers/${'0'.repeat(24)}/accept`)
       .set('Authorization', `Bearer ${ownerToken}`);
@@ -600,10 +524,10 @@ describe('offers routes', () => {
   });
 
   test('POST /api/offers/:id/accept for foreign owner is not_found', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: otherToken } = await register(PHONE_OWNER2);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'FROFFR1IR1');
-    const cargoId = await publishCargo(ownerToken);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: otherToken } = await h.register(PHONE_OWNER2);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'FROFFR1IR1');
+    const cargoId = await h.publishCargo(ownerToken);
 
     const offerRes = await request(app)
       .post('/api/offers')
@@ -618,10 +542,10 @@ describe('offers routes', () => {
   });
 
   test('accepting a second offer on same cargo fails (cargo already matched)', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const d1 = await setupDriverWithVehicle(PHONE_DRIVER, 'DBLACP1IR1');
-    const d2 = await setupDriverWithVehicle(PHONE_DRIVER2, 'DBLACP2IR1');
-    const cargoId = await publishCargo(ownerToken);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const d1 = await h.setupDriverWithVehicle(PHONE_DRIVER, 'DBLACP1IR1');
+    const d2 = await h.setupDriverWithVehicle(PHONE_DRIVER2, 'DBLACP2IR1');
+    const cargoId = await h.publishCargo(ownerToken);
 
     const o1 = await request(app)
       .post('/api/offers')
@@ -647,9 +571,9 @@ describe('offers routes', () => {
   // --- Withdrawn offer cannot be updated ---
 
   test('PATCH /api/offers/:id on a withdrawn offer is invalid_status', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'WTHDRW1IR1');
-    const cargoId = await publishCargo(ownerToken);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'WTHDRW1IR1');
+    const cargoId = await h.publishCargo(ownerToken);
 
     const created = await request(app)
       .post('/api/offers')
@@ -670,9 +594,9 @@ describe('offers routes', () => {
   // --- Plan 028: owner cancel of open cargo rejects pending offers ---
 
   test('owner cancel of open cargo rejects the pending bid (not withdrawn)', async () => {
-    const { token: ownerToken } = await register(PHONE_OWNER);
-    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'CNCLREJ1IR1');
-    const cargoId = await publishCargo(ownerToken);
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'CNCLREJ1IR1');
+    const cargoId = await h.publishCargo(ownerToken);
 
     const offerRes = await request(app)
       .post('/api/offers')
@@ -696,7 +620,7 @@ describe('offers routes', () => {
   });
 
   test('unknown /api/offers routes fall through to 404', async () => {
-    const { token: driverToken } = await setupDriverWithVehicle(PHONE_DRIVER, 'NOPEOF1IR1');
+    const { token: driverToken } = await h.setupDriverWithVehicle(PHONE_DRIVER, 'NOPEOF1IR1');
     const res = await request(app)
       .get('/api/offers/nope')
       .set('Authorization', `Bearer ${driverToken}`);

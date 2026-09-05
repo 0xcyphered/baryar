@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "jest --runInBand --forceExit"
+    "test": "jest --runInBand --forceExit",
+    "test:coverage": "jest --runInBand --forceExit --coverage"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -33,6 +34,23 @@
     ],
     "globalSetup": "./test/globalSetup.js",
     "globalTeardown": "./test/globalTeardown.js",
-    "testTimeout": 30000
+    "testTimeout": 30000,
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/index.js"
+    ],
+    "coverageDirectory": "coverage",
+    "coverageReporters": [
+      "text",
+      "text-summary"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "statements": 70,
+        "branches": 55,
+        "functions": 70,
+        "lines": 70
+      }
+    }
   }
 }
