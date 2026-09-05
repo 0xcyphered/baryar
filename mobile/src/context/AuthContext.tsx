@@ -6,7 +6,7 @@ import {
   getAuthToken,
   setAuthToken as storeToken,
 } from '../services/apiClient';
-import { getMe, requestOtp, verifyOtp as apiVerifyOtp } from '../services/authApi';
+import { getMe, requestOtp, updateMe, verifyOtp as apiVerifyOtp } from '../services/authApi';
 
 const USER_KEY = 'auth_user';
 const USER_KEY_EXP = 'auth_user_exp';
@@ -21,6 +21,8 @@ interface AuthState {
   verifyOtp: (phone: string, code: string) => Promise<void>;
   /** Log out: clear stored token + user, reset state. */
   signOut: () => Promise<void>;
+  /** PATCH /api/auth/me and refresh cached user. */
+  updateProfile: (fields: { name?: string; email?: string; nationalId?: string }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -103,6 +105,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await SecureStore.deleteItemAsync(USER_KEY_EXP);
   }, []);
 
+  const updateProfileFn = useCallback(async (fields: { name?: string; email?: string; nationalId?: string }) => {
+    const updated = await updateMe(fields);
+    setUser(updated);
+    await SecureStore.setItemAsync(USER_KEY, JSON.stringify(updated));
+    await SecureStore.setItemAsync(USER_KEY_EXP, Date.now().toString());
+  }, []);
+
   const value: AuthState = {
     user,
     token,
@@ -110,6 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signIn,
     verifyOtp: verifyOtpFn,
     signOut,
+    updateProfile: updateProfileFn,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

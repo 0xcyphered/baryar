@@ -61,6 +61,31 @@ export async function createDocument(body: {
   return res.document;
 }
 
+/** Multipart upload (030). Field name on the server is `file`. */
+export async function uploadDocument(input: {
+  kind: string;
+  vehicleId?: string | null;
+  uri: string;
+  name: string;
+  mimeType: string;
+}): Promise<DriverDocument> {
+  const form = new FormData();
+  form.append('kind', input.kind);
+  if (input.vehicleId) form.append('vehicleId', input.vehicleId);
+  // RN FormData file part shape — NOT a File/Blob.
+  form.append('file', {
+    uri: input.uri,
+    name: input.name || 'document',
+    type: input.mimeType || 'application/octet-stream',
+  } as unknown as Blob);
+  const res = await apiFetch<DocumentResponse>('/api/driver/documents/upload', {
+    method: 'POST',
+    body: form,
+    multipart: true,
+  });
+  return res.document;
+}
+
 export async function listDocuments(kind?: string): Promise<DriverDocument[]> {
   const qs = kind ? `?kind=${encodeURIComponent(kind)}` : '';
   const res = await apiFetch<DocumentListResponse>(`/api/driver/documents${qs}`);

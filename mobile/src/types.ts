@@ -33,6 +33,7 @@ export interface UserProfile {
   phone: string;
   name: string;
   email: string;
+  nationalId: string;
   roles: string[];
   status: string;
   phoneVerifiedAt: string | null;
@@ -163,4 +164,11 @@ export interface DriverDocument {
   rejectionReason: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Public platform settings from GET /api/settings (027). Unauthenticated. */
+export interface PublicPlatformSettings {
+  platformName: string;
+  supportPhone: string;
+  defaultCurrency: string;
 }

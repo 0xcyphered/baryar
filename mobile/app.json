@@ -8,7 +8,8 @@
     "scheme": "baryar",
     "userInterfaceStyle": "light",
     "plugins": [
-      "@maplibre/maplibre-react-native"
+      "@maplibre/maplibre-react-native",
+      "expo-sharing"
     ],
     "ios": {
       "supportsTablet": true,

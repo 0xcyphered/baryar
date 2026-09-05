@@ -42,6 +42,21 @@ export async function verifyOtp(
 }
 
 /**
+ * PATCH the current user profile (027). Returns the updated profile.
+ */
+export async function updateMe(body: {
+  name?: string;
+  email?: string;
+  nationalId?: string;
+}): Promise<UserProfile> {
+  const res = await apiFetch<MeResponse>('/api/auth/me', {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+  return res.user;
+}
+
+/**
  * Fetch the current user profile using the stored JWT.
  * Returns null if the token is invalid/expired (401).
  */

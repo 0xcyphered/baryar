@@ -7,14 +7,18 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { COLORS } from '../theme';
-import { listDocuments, createDocument, deleteDocument, listVehicles } from '../services/driverApi';
+import { listDocuments, uploadDocument, deleteDocument, listVehicles } from '../services/driverApi';
+import { getAuthToken } from '../services/apiClient';
+import { API_BASE } from '../config';
 import type { DriverDocument, Vehicle } from '../types';
 
 const KIND_LABELS: Record<string, string> = {
@@ -40,6 +44,19 @@ const STATUS_COLORS: Record<string, string> = {
 
 const KINDS = ['driving_license', 'vehicle_registration', 'safety_card', 'national_id', 'professional_card', 'other'];
 
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+];
+
+interface PickedFile {
+  uri: string;
+  name: string;
+  mimeType: string;
+}
+
 export default function DriverDocumentsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
@@ -53,10 +70,9 @@ export default function DriverDocumentsScreen() {
   const [showForm, setShowForm] = useState(false);
   const [formKind, setFormKind] = useState('driving_license');
   const [formVehicleId, setFormVehicleId] = useState('');
-  const [formStorageKey, setFormStorageKey] = useState('');
-  const [formOriginalName, setFormOriginalName] = useState('');
-  const [formMimeType, setFormMimeType] = useState('');
+  const [pickedFile, setPickedFile] = useState<PickedFile | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [viewingDoc, setViewingDoc] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -75,25 +91,79 @@ export default function DriverDocumentsScreen() {
   useEffect(() => { queueMicrotask(() => { setLoading(true); loadData(); }); }, [loadData]);
   const onRefresh = useCallback(() => { setRefreshing(true); loadData(); }, [loadData]);
 
+  const pickFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ALLOWED_MIME_TYPES,
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+      const asset = result.assets[0];
+      setPickedFile({
+        uri: asset.uri,
+        name: asset.name || 'document',
+        mimeType: asset.mimeType || 'application/octet-stream',
+      });
+    } catch {
+      Alert.alert('خطا', 'انتخاب فایل با خطا مواجه شد');
+    }
+  };
+
   const handleAdd = async () => {
+    if (!pickedFile) {
+      Alert.alert('خطا', 'ابتدا فایل سند را انتخاب کنید');
+      return;
+    }
     setSubmitting(true);
     try {
-      await createDocument({
+      await uploadDocument({
         kind: formKind,
-        vehicleId: formVehicleId || undefined,
-        storageKey: formStorageKey || undefined,
-        originalName: formOriginalName || undefined,
-        mimeType: formMimeType || undefined,
+        vehicleId: formVehicleId || null,
+        uri: pickedFile.uri,
+        name: pickedFile.name,
+        mimeType: pickedFile.mimeType,
       });
-      setFormStorageKey('');
-      setFormOriginalName('');
-      setFormMimeType('');
+      setPickedFile(null);
       setShowForm(false);
       loadData();
-    } catch {
-      Alert.alert('خطا', 'ثبت سند با خطا مواجه شد');
+    } catch (err: any) {
+      if (err && err.error === 'invalid_file_type') {
+        Alert.alert('خطا', 'فرمت فایل مجاز نیست (فقط jpg، png، webp و pdf)');
+      } else if (err && err.error === 'file_too_large') {
+        Alert.alert('خطا', 'حجم فایل بیش از ۵ مگابایت است');
+      } else if (err && err.error === 'validation_error') {
+        Alert.alert('خطا', 'اطلاعات سند کامل نیست');
+      } else {
+        Alert.alert('خطا', 'ثبت سند با خطا مواجه شد');
+      }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openDocument = async (doc: DriverDocument) => {
+    setViewingDoc(doc.id);
+    try {
+      const token = await getAuthToken();
+      const fileUri = (FileSystem.cacheDirectory || '') + `doc-${doc.id}`;
+      await FileSystem.downloadAsync(
+        `${API_BASE}/api/driver/documents/${doc.id}/file`,
+        fileUri,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      );
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: doc.mimeType || 'application/octet-stream',
+        });
+      } else {
+        Alert.alert('خطا', 'اشتراک‌گذاری فایل در این دستگاه پشتیبانی نمی‌شود');
+      }
+    } catch {
+      Alert.alert('خطا', 'فایلی برای این سند موجود نیست');
+    } finally {
+      setViewingDoc(null);
     }
   };
 
@@ -189,37 +259,19 @@ export default function DriverDocumentsScreen() {
             </>
           )}
 
-          <Text style={styles.label}>کلید ذخیره‌سازی</Text>
-          <TextInput
-            style={styles.input}
-            value={formStorageKey}
-            onChangeText={setFormStorageKey}
-            placeholder="اختیاری"
-            placeholderTextColor={COLORS.gray}
-          />
-
-          <Text style={styles.label}>نام فایل</Text>
-          <TextInput
-            style={styles.input}
-            value={formOriginalName}
-            onChangeText={setFormOriginalName}
-            placeholder="اختیاری"
-            placeholderTextColor={COLORS.gray}
-          />
-
-          <Text style={styles.label}>نوع فایل</Text>
-          <TextInput
-            style={styles.input}
-            value={formMimeType}
-            onChangeText={setFormMimeType}
-            placeholder="اختیاری — مثال: application/pdf"
-            placeholderTextColor={COLORS.gray}
-          />
+          <Text style={styles.label}>فایل سند</Text>
+          <Pressable style={styles.pickButton} onPress={pickFile}>
+            <Ionicons name="document-attach-outline" size={18} color={COLORS.blue} />
+            <Text style={styles.pickButtonText} numberOfLines={1}>
+              {pickedFile ? pickedFile.name : 'انتخاب فایل (jpg، png، webp، pdf)'}
+            </Text>
+          </Pressable>
+          <Text style={styles.hintText}>حداکثر حجم: ۵ مگابایت</Text>
 
           <Pressable
-            style={[styles.button, submitting && styles.buttonDisabled]}
+            style={[styles.button, (submitting || !pickedFile) && styles.buttonDisabled]}
             onPress={handleAdd}
-            disabled={submitting}
+            disabled={submitting || !pickedFile}
           >
             {submitting ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.buttonText}>ثبت سند</Text>}
           </Pressable>
@@ -249,6 +301,13 @@ export default function DriverDocumentsScreen() {
                     <Text style={styles.rejectionText}>{doc.rejectionReason}</Text>
                   ) : null}
                 </View>
+                <Pressable onPress={() => openDocument(doc)} style={styles.viewBtn} disabled={viewingDoc === doc.id}>
+                  {viewingDoc === doc.id ? (
+                    <ActivityIndicator size="small" color={COLORS.blue} />
+                  ) : (
+                    <Ionicons name="eye-outline" size={18} color={COLORS.blue} />
+                  )}
+                </Pressable>
                 {doc.verificationStatus === 'pending' && (
                   <Pressable onPress={() => handleDelete(doc)} style={styles.deleteBtn}>
                     <Ionicons name="trash-outline" size={18} color={COLORS.red} />
@@ -319,6 +378,27 @@ const styles = StyleSheet.create({
     color: COLORS.textDark,
     writingDirection: 'rtl',
   },
+  pickButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.grayLight,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  pickButtonText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: 'Vazirmatn_400Regular',
+    color: COLORS.textDark,
+  },
+  hintText: {
+    fontSize: 11,
+    fontFamily: 'Vazirmatn_400Regular',
+    color: COLORS.gray,
+    marginTop: 4,
+  },
   pickerRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -387,6 +467,7 @@ const styles = StyleSheet.create({
     color: COLORS.red,
     marginTop: 4,
   },
+  viewBtn: { padding: 8 },
   deleteBtn: { padding: 8 },
   errorText: {
     color: COLORS.red,
