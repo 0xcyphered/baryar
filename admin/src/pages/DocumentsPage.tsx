@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { apiGet, apiPost } from '../lib/api';
+import * as React from 'react';
+import { apiGet, apiPost, apiGetBlobUrl } from '../lib/api';
 import { AlertCircle, Check, X, FileText } from 'lucide-react';
 
 interface AdminDocument {
@@ -54,6 +55,7 @@ export default function DocumentsPage() {
   const [statusFilter, setStatusFilter] = useState('pending');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const fetchDocuments = useCallback(async () => {
     setLoading(true);
@@ -110,6 +112,18 @@ export default function DocumentsPage() {
     }
   };
 
+  const handlePreview = async (doc: { id: string; originalName: string }) => {
+    try {
+      const url = await apiGetBlobUrl(`/api/admin/documents/${doc.id}/file`);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setPreviewError(null);
+    } catch {
+      setPreviewError('فایلی برای این سند موجود نیست');
+      setTimeout(() => setPreviewError(null), 4000);
+    }
+  };
+
   if (error) {
     return (
       <div className="flex items-center gap-2 rounded-lg bg-red-50 p-4 text-sm text-red-600">
@@ -137,6 +151,23 @@ export default function DocumentsPage() {
         </select>
       </div>
 
+      {previewError && (
+        <div className="flex items-center justify-between rounded-lg bg-red-50 p-3 text-sm text-red-600">
+          <span className="flex items-center gap-2">
+            <AlertCircle size={16} />
+            {previewError}
+          </span>
+          <button
+            onClick={() => setPreviewError(null)}
+            type="button"
+            className="rounded p-1 text-red-400 hover:bg-red-100"
+            title="بستن"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="text-sm text-gray-400">در حال بارگذاری...</div>
       ) : (
@@ -154,8 +185,8 @@ export default function DocumentsPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {documents.map((doc) => (
-                <>
-                  <tr key={doc.id} className="bg-white">
+                <React.Fragment key={doc.id}>
+                  <tr className="bg-white">
                     <td className="px-4 py-3">
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -167,10 +198,15 @@ export default function DocumentsPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-700">
                       {doc.originalName ? (
-                        <span className="flex items-center gap-1">
+                        <button
+                          onClick={() => handlePreview(doc)}
+                          type="button"
+                          className="flex items-center gap-1 text-blue-600 hover:underline"
+                          title="مشاهده فایل"
+                        >
                           <FileText size={14} className="text-gray-400" />
                           {doc.originalName}
-                        </span>
+                        </button>
                       ) : (
                         <span className="text-gray-400">—</span>
                       )}
@@ -243,7 +279,7 @@ export default function DocumentsPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </React.Fragment>
               ))}
               {documents.length === 0 && (
                 <tr>

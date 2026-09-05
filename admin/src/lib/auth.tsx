@@ -7,6 +7,7 @@ interface PublicUser {
   phone: string;
   name: string;
   email: string;
+  nationalId: string;
   roles: string[];
   status: string;
   phoneVerifiedAt: string | null;

@@ -62,4 +62,27 @@ export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
   return request<T>('PUT', path, body);
 }
 
+/**
+ * Fetch a binary endpoint with the auth header; returns an object URL.
+ * Callers own the revocation: after the tab opens, revoke with
+ * `URL.revokeObjectURL(url)` on a `setTimeout(..., 60_000)` — the tab stays
+ * functional once loaded.
+ */
+export async function apiGetBlobUrl(path: string): Promise<string> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(path, { headers });
+  if (res.status === 401) {
+    clearToken();
+    window.location.href = '/login';
+    throw { error: 'unauthorized' } satisfies ApiError;
+  }
+  if (!res.ok) {
+    throw { error: 'not_found' } satisfies ApiError;
+  }
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
 export type { ApiError };

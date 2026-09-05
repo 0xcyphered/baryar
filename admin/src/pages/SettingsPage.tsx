@@ -73,7 +73,14 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-bold text-gray-800">تنظیمات</h2>
+      <div className="flex items-center gap-2">
+        <h2 className="text-lg font-bold text-gray-800">تنظیمات</h2>
+        {settings.maintenanceMode && (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+            حالت تعمیر فعال است
+          </span>
+        )}
+      </div>
 
       {loading ? (
         <div className="text-sm text-gray-400">در حال بارگذاری...</div>
@@ -127,7 +134,15 @@ export default function SettingsPage() {
               <input
                 type="checkbox"
                 checked={settings.maintenanceMode}
-                onChange={(e) => setSettings({ ...settings, maintenanceMode: e.target.checked })}
+                onChange={(e) => {
+                  if (e.target.checked && !settings.maintenanceMode) {
+                    const ok = window.confirm(
+                      'با فعال‌سازی حالت تعمیر، همه کاربران غیرمدیر از ثبت و ویرایش منع می‌شوند. ادامه؟'
+                    );
+                    if (!ok) return;
+                  }
+                  setSettings({ ...settings, maintenanceMode: e.target.checked });
+                }}
                 className="h-4 w-4 rounded border-gray-300"
               />
               حالت تعمیر و نگهداری
