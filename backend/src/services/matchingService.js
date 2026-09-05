@@ -55,6 +55,24 @@ async function findOwnedActiveVehicle({ userId, vehicleId }) {
   return vehicle;
 }
 
+// Shared Phase 1 compatibility matrix (plan 028 list + plan 036 write).
+// Vehicle is a road asset: land/multimodal only. Refrigerated cargo needs
+// a reefer. Weight/volume treat 0 as "unspecified" on cargo (schema min 0)
+// so `$lte` / `<=` is the whole rule.
+function vehicleFitsCargo(vehicle, cargo) {
+  const mode = cargo.transportMode || "land";
+  if (mode !== "land" && mode !== "multimodal") return false;
+  const weight = (cargo.dimensions && cargo.dimensions.weightKg) || 0;
+  const volume = (cargo.dimensions && cargo.dimensions.volumeM3) || 0;
+  if (weight > vehicle.capacityWeightKg) return false;
+  if (volume > vehicle.capacityVolumeM3) return false;
+  const specials = cargo.specialCharacteristics || [];
+  if (vehicle.vehicleType !== "reefer" && specials.includes("refrigerated")) {
+    return false;
+  }
+  return true;
+}
+
 // --- Driver side ---
 
 // List open cargo matching the driver's vehicle capacity + origin location.
@@ -112,7 +130,8 @@ async function createOffer({ userId, cargoId, vehicleId, body }) {
   const cargo = await Cargo.findOne({ _id: cargoId, status: "open" });
   if (!cargo) fail("invalid_status");
 
-  await findOwnedActiveVehicle({ userId, vehicleId });
+  const vehicle = await findOwnedActiveVehicle({ userId, vehicleId });
+  if (!vehicleFitsCargo(vehicle, cargo)) fail("validation_error");
 
   const fields = pickOfferFields(body);
   if (
@@ -301,6 +320,7 @@ function publicOffer(offer) {
 module.exports = {
   listMatchingCargo,
   createOffer,
+  vehicleFitsCargo,
   listMyOffers,
   updateOffer,
   withdrawOffer,

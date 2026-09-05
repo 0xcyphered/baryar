@@ -95,9 +95,12 @@ describe('offers routes', () => {
     return id;
   }
 
-  async function setupDriverWithVehicle(phone, plate) {
+  async function setupDriverWithVehicle(phone, plateOrOverrides) {
     const { token } = await registerDriverViaProfile(phone);
-    const vehicleId = await createVehicle(token, { plate: plate || `V${Date.now()}IR11` });
+    const overrides = typeof plateOrOverrides === 'string'
+      ? { plate: plateOrOverrides }
+      : (plateOrOverrides || {});
+    const vehicleId = await createVehicle(token, overrides);
     return { token, vehicleId };
   }
 
@@ -220,6 +223,125 @@ describe('offers routes', () => {
       .send({ cargoId, vehicleId: other.vehicleId, priceRial: 1000000 });
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: 'not_found' });
+  });
+
+  // --- Plan 036: eligibility on create (vehicleFitsCargo) ---
+
+  test('POST /api/offers on sea cargo with a truck is validation_error', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'SEAREJ1IR1');
+    const cargoId = await publishCargo(ownerToken, { title: 'Sea cargo', transportMode: 'sea' });
+
+    const res = await request(app)
+      .post('/api/offers')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .send({ cargoId, vehicleId, priceRial: 1000000 });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'validation_error' });
+    expect(await Offer.countDocuments()).toBe(0);
+  });
+
+  test('POST /api/offers on air cargo with a truck is validation_error', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'AIRREJ1IR1');
+    const cargoId = await publishCargo(ownerToken, { title: 'Air cargo', transportMode: 'air' });
+
+    const res = await request(app)
+      .post('/api/offers')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .send({ cargoId, vehicleId, priceRial: 1000000 });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'validation_error' });
+    expect(await Offer.countDocuments()).toBe(0);
+  });
+
+  test('POST /api/offers on multimodal cargo with a truck succeeds', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'MULTIM1IR1');
+    const cargoId = await publishCargo(ownerToken, { title: 'Multimodal cargo', transportMode: 'multimodal' });
+
+    const res = await request(app)
+      .post('/api/offers')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .send({ cargoId, vehicleId, priceRial: 1000000 });
+    expect(res.status).toBe(201);
+    expect(res.body.offer.status).toBe('pending');
+  });
+
+  test('POST /api/offers above weight capacity is validation_error', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, {
+      plate: 'WTREJ1IR11',
+      capacityWeightKg: 5000,
+    });
+    const cargoId = await publishCargo(ownerToken, {
+      title: 'Heavy cargo',
+      dimensions: { weightKg: 8000, volumeM3: 10 },
+    });
+
+    const res = await request(app)
+      .post('/api/offers')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .send({ cargoId, vehicleId, priceRial: 1000000 });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'validation_error' });
+    expect(await Offer.countDocuments()).toBe(0);
+  });
+
+  test('POST /api/offers above volume capacity is validation_error', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, {
+      plate: 'VOLREJ1IR1',
+      capacityVolumeM3: 10,
+    });
+    const cargoId = await publishCargo(ownerToken, {
+      title: 'Bulky cargo',
+      dimensions: { weightKg: 1000, volumeM3: 50 },
+    });
+
+    const res = await request(app)
+      .post('/api/offers')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .send({ cargoId, vehicleId, priceRial: 1000000 });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'validation_error' });
+    expect(await Offer.countDocuments()).toBe(0);
+  });
+
+  test('POST /api/offers on refrigerated cargo with a dry truck is validation_error', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, 'DRYRFR1IR1');
+    const cargoId = await publishCargo(ownerToken, {
+      title: 'Chilled cargo',
+      specialCharacteristics: ['refrigerated'],
+    });
+
+    const res = await request(app)
+      .post('/api/offers')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .send({ cargoId, vehicleId, priceRial: 1000000 });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'validation_error' });
+    expect(await Offer.countDocuments()).toBe(0);
+  });
+
+  test('POST /api/offers on refrigerated cargo with a reefer succeeds', async () => {
+    const { token: ownerToken } = await register(PHONE_OWNER);
+    const { token: driverToken, vehicleId } = await setupDriverWithVehicle(PHONE_DRIVER, {
+      plate: 'REEFER1IR11',
+      vehicleType: 'reefer',
+    });
+    const cargoId = await publishCargo(ownerToken, {
+      title: 'Chilled cargo',
+      specialCharacteristics: ['refrigerated'],
+    });
+
+    const res = await request(app)
+      .post('/api/offers')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .send({ cargoId, vehicleId, priceRial: 1000000 });
+    expect(res.status).toBe(201);
+    expect(res.body.offer.status).toBe('pending');
   });
 
   // --- List my offers (driver) ---
