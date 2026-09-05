@@ -3,41 +3,24 @@ const { auth } = require("../middleware/auth");
 const { requireNotMaintenance } = require("../middleware/maintenance");
 const matchingService = require("../services/matchingService");
 const cargoService = require("../services/cargoService");
+const { requireDriver, requireCargoOwner } = require("../middleware/requireRole");
+const { sendError } = require("../utils/httpError");
 
 const router = express.Router();
 
-function requireDriver(req, res, next) {
-  if (!req.user || !Array.isArray(req.user.roles) || !req.user.roles.includes("driver")) {
-    return res.status(403).json({ error: "forbidden" });
-  }
-  return next();
-}
-
-function requireCargoOwner(req, res, next) {
-  if (!req.user || !Array.isArray(req.user.roles) || !req.user.roles.includes("cargo_owner")) {
-    return res.status(403).json({ error: "forbidden" });
-  }
-  return next();
-}
+const OFFER_ERRORS = {
+  invalid_cargo_id: 400,
+  invalid_vehicle_id: 400,
+  invalid_offer_id: 400,
+  validation_error: 400,
+  offer_exists: 409,
+  forbidden: 403,
+  not_found: 404,
+  invalid_status: 409,
+};
 
 function sendOfferError(res, err) {
-  if (err && err.name === "ValidationError") {
-    return res.status(400).json({ error: "validation_error" });
-  }
-  const code = err && err.code;
-  const map = {
-    invalid_cargo_id: 400,
-    invalid_vehicle_id: 400,
-    invalid_offer_id: 400,
-    validation_error: 400,
-    offer_exists: 409,
-    forbidden: 403,
-    not_found: 404,
-    invalid_status: 409,
-  };
-  const status = map[code] || 500;
-  const error = map[code] ? code : "server_error";
-  return res.status(status).json({ error });
+  return sendError(res, err, OFFER_ERRORS);
 }
 
 // Both roles appear in this router (drivers bid, owners award), so gating is

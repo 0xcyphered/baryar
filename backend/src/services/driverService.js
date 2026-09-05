@@ -4,6 +4,9 @@ const Vehicle = require('../models/Vehicle');
 const Document = require('../models/Document');
 const User = require('../models/User');
 const storageService = require('./storageService');
+const { fail } = require('../utils/httpError');
+const { assertId } = require('../utils/objectId');
+const { pickFields } = require('../utils/pickFields');
 
 const MAX_LIST = 100;
 
@@ -11,25 +14,6 @@ const PROFILE_FIELDS = ['licenseNumber', 'professionalCardNumber'];
 const VEHICLE_FIELDS = ['vehicleType', 'plate', 'capacityWeightKg', 'capacityVolumeM3', 'year'];
 const VEHICLE_UPDATE_FIELDS = ['vehicleType', 'capacityWeightKg', 'capacityVolumeM3', 'year', 'status'];
 const DOCUMENT_FIELDS = ['kind', 'vehicleId', 'originalName', 'mimeType'];
-
-function fail(code) {
-  const e = new Error(code);
-  e.code = code;
-  throw e;
-}
-
-function assertId(id, code) {
-  if (typeof id !== 'string' || !/^[0-9a-fA-F]{24}$/.test(id)) fail(code);
-}
-
-function pickFields(body, keys) {
-  const out = {};
-  if (!body || typeof body !== 'object') return out;
-  for (const key of keys) {
-    if (body[key] !== undefined) out[key] = body[key];
-  }
-  return out;
-}
 
 function publicProfile(profile) {
   return {

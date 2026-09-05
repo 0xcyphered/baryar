@@ -1,10 +1,5 @@
 const SystemSettings = require('../models/SystemSettings');
-
-function fail(code) {
-  const e = new Error(code);
-  e.code = code;
-  throw e;
-}
+const { fail } = require('../utils/httpError');
 
 function publicSettings(doc) {
   return {

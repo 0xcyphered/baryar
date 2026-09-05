@@ -3,27 +3,23 @@ const { auth } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/adminGuard');
 const adminService = require('../services/adminService');
 const settingsService = require('../services/settingsService');
+const { sendError } = require('../utils/httpError');
 
 const router = express.Router();
 
+const ADMIN_ERRORS = {
+  invalid_user_id: 400,
+  invalid_cargo_id: 400,
+  invalid_document_id: 400,
+  validation_error: 400,
+  admin_self_action: 403,
+  forbidden: 403,
+  not_found: 404,
+  invalid_status: 409,
+};
+
 function sendAdminError(res, err) {
-  if (err && err.name === 'ValidationError') {
-    return res.status(400).json({ error: 'validation_error' });
-  }
-  const code = err && err.code;
-  const map = {
-    invalid_user_id: 400,
-    invalid_cargo_id: 400,
-    invalid_document_id: 400,
-    validation_error: 400,
-    admin_self_action: 403,
-    forbidden: 403,
-    not_found: 404,
-    invalid_status: 409,
-  };
-  const status = map[code] || 500;
-  const error = map[code] ? code : 'server_error';
-  return res.status(status).json({ error });
+  return sendError(res, err, ADMIN_ERRORS);
 }
 
 router.use(auth, requireAdmin);

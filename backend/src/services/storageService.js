@@ -2,6 +2,7 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
+const { fail } = require('../utils/httpError');
 
 const DEFAULT_DIR = path.join(__dirname, '../../uploads');
 const ALLOWED_MIME = new Set([
@@ -17,12 +18,6 @@ const EXT_FOR_MIME = {
   'application/pdf': '.pdf',
 };
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MiB
-
-function fail(code) {
-  const e = new Error(code);
-  e.code = code;
-  throw e;
-}
 
 function uploadRoot() {
   const raw = process.env.UPLOAD_DIR;

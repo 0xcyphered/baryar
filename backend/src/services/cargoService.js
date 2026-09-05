@@ -4,22 +4,15 @@ const Cargo = require('../models/Cargo');
 // this is not a circular require (checked in plan 028).
 const matchingService = require('./matchingService');
 const settingsService = require('./settingsService');
+const { fail } = require('../utils/httpError');
+const { assertId } = require('../utils/objectId');
+const { pickFields } = require('../utils/pickFields');
 
 const MAX_LIST = 100;
 const EDITABLE_FIELDS = [
   'title', 'description', 'transportMode', 'origin', 'destination',
   'dimensions', 'specialCharacteristics', 'pickupAt', 'deliverBy',
 ];
-
-function fail(code) {
-  const e = new Error(code);
-  e.code = code;
-  throw e;
-}
-
-function assertObjectId(id) {
-  if (typeof id !== 'string' || !/^[0-9a-fA-F]{24}$/.test(id)) fail('invalid_cargo_id');
-}
 
 function publicCargo(cargo) {
   return {
@@ -41,12 +34,7 @@ function publicCargo(cargo) {
 }
 
 function pickEditableFields(body) {
-  const out = {};
-  if (!body || typeof body !== 'object') return out;
-  for (const key of EDITABLE_FIELDS) {
-    if (body[key] !== undefined) out[key] = body[key];
-  }
-  return out;
+  return pickFields(body, EDITABLE_FIELDS);
 }
 
 function assertTiming(pickupAt, deliverBy) {
@@ -83,7 +71,7 @@ async function listCargo({ ownerUserId, status }) {
 }
 
 async function findOwned({ ownerUserId, id }) {
-  assertObjectId(id);
+  assertId(id, 'invalid_cargo_id');
   const cargo = await Cargo.findOne({ _id: id, ownerUserId });
   if (!cargo) fail('not_found');
   return cargo;

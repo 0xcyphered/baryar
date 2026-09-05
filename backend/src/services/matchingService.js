@@ -3,28 +3,16 @@ const Offer = require("../models/Offer");
 const Vehicle = require("../models/Vehicle");
 const shipmentService = require("./shipmentService");
 const notificationService = require("./notificationService");
+const { fail } = require("../utils/httpError");
+const { assertId } = require("../utils/objectId");
+const { pickFields } = require("../utils/pickFields");
 
 const MAX_LIST = 100;
 // vehicleId/cargoId come from the route/params, never the body.
 const OFFER_FIELDS = ["priceRial", "note"];
 
-function fail(code) {
-  const e = new Error(code);
-  e.code = code;
-  throw e;
-}
-
-function assertId(id, code) {
-  if (typeof id !== "string" || !/^[0-9a-fA-F]{24}$/.test(id)) fail(code);
-}
-
 function pickOfferFields(body) {
-  const out = {};
-  if (!body || typeof body !== "object") return out;
-  for (const key of OFFER_FIELDS) {
-    if (body[key] !== undefined) out[key] = body[key];
-  }
-  return out;
+  return pickFields(body, OFFER_FIELDS);
 }
 
 function parseRadius(radiusKm) {

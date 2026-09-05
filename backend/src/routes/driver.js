@@ -4,6 +4,8 @@ const { auth } = require('../middleware/auth');
 const { requireNotMaintenance } = require('../middleware/maintenance');
 const driverService = require('../services/driverService');
 const storageService = require('../services/storageService');
+const { requireDriver } = require('../middleware/requireRole');
+const { sendError } = require('../utils/httpError');
 
 const router = express.Router();
 
@@ -20,34 +22,22 @@ const upload = multer({
   },
 });
 
-function requireDriver(req, res, next) {
-  if (!req.user || !Array.isArray(req.user.roles) || !req.user.roles.includes('driver')) {
-    return res.status(403).json({ error: 'forbidden' });
-  }
-  return next();
-}
+const DRIVER_ERRORS = {
+  invalid_vehicle_id: 400,
+  invalid_document_id: 400,
+  validation_error: 400,
+  profile_required: 400,
+  forbidden: 403,
+  not_found: 404,
+  plate_in_use: 409,
+  document_locked: 409,
+  invalid_file_type: 400,
+  file_too_large: 413,
+  LIMIT_FILE_SIZE: 413,
+};
 
 function sendDriverError(res, err) {
-  if (err && err.name === 'ValidationError') {
-    return res.status(400).json({ error: 'validation_error' });
-  }
-  const code = err && err.code;
-  const map = {
-    invalid_vehicle_id: 400,
-    invalid_document_id: 400,
-    validation_error: 400,
-    profile_required: 400,
-    forbidden: 403,
-    not_found: 404,
-    plate_in_use: 409,
-    document_locked: 409,
-    invalid_file_type: 400,
-    file_too_large: 413,
-    LIMIT_FILE_SIZE: 413,
-  };
-  const status = map[code] || 500;
-  const error = map[code] ? code : 'server_error';
-  return res.status(status).json({ error });
+  return sendError(res, err, DRIVER_ERRORS);
 }
 
 router.use(auth, requireNotMaintenance);

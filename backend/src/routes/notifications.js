@@ -2,23 +2,19 @@ const express = require("express");
 const { auth } = require("../middleware/auth");
 const { requireNotMaintenance } = require("../middleware/maintenance");
 const notificationService = require("../services/notificationService");
+const { sendError } = require("../utils/httpError");
 
 const router = express.Router();
 
+const NOTIFICATION_ERRORS = {
+  invalid_notification_id: 400,
+  validation_error: 400,
+  forbidden: 403,
+  not_found: 404,
+};
+
 function sendNotificationError(res, err) {
-  if (err && err.name === "ValidationError") {
-    return res.status(400).json({ error: "validation_error" });
-  }
-  const code = err && err.code;
-  const map = {
-    invalid_notification_id: 400,
-    validation_error: 400,
-    forbidden: 403,
-    not_found: 404,
-  };
-  const status = map[code] || 500;
-  const error = map[code] ? code : "server_error";
-  return res.status(status).json({ error });
+  return sendError(res, err, NOTIFICATION_ERRORS);
 }
 
 // Every notification is the requester's own; no role gates needed.

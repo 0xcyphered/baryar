@@ -1,16 +1,8 @@
 const Notification = require("../models/Notification");
+const { fail } = require("../utils/httpError");
+const { assertId } = require("../utils/objectId");
 
 const MAX_LIST = 100;
-
-function fail(code) {
-  const e = new Error(code);
-  e.code = code;
-  throw e;
-}
-
-function assertId(id, code) {
-  if (typeof id !== "string" || !/^[0-9a-fA-F]{24}$/.test(id)) fail(code);
-}
 
 // Pluggable in-app channel. Phase 2 (push provider / SMS gateway, V6 §6/§9)
 // replaces this function body only — the Notification store and the HTTP

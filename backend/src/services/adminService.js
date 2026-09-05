@@ -7,22 +7,16 @@ const Offer = require('../models/Offer');
 const Shipment = require('../models/Shipment');
 const notificationService = require('./notificationService');
 const cargoService = require('./cargoService');
+const driverService = require('./driverService');
 const matchingService = require('./matchingService');
 const { EDITABLE_FIELDS } = require('./cargoService');
 const { normalizeIranPhone } = require('../utils/phone');
 const storageService = require('./storageService');
+const { fail } = require('../utils/httpError');
+const { assertId } = require('../utils/objectId');
+const { pickFields } = require('../utils/pickFields');
 
 const MAX_LIST = 100;
-
-function fail(code) {
-  const e = new Error(code);
-  e.code = code;
-  throw e;
-}
-
-function assertId(id, code) {
-  if (typeof id !== 'string' || !/^[0-9a-fA-F]{24}$/.test(id)) fail(code);
-}
 
 function publicAdminUser(user) {
   return {
@@ -37,15 +31,6 @@ function publicAdminUser(user) {
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
-}
-
-function pickFields(body, keys) {
-  const out = {};
-  if (!body || typeof body !== 'object') return out;
-  for (const key of keys) {
-    if (body[key] !== undefined) out[key] = body[key];
-  }
-  return out;
 }
 
 // --- Users ---
@@ -284,25 +269,7 @@ async function listDocuments({ status } = {}) {
     query.verificationStatus = status;
   }
   const documents = await Document.find(query).sort({ createdAt: -1 }).limit(MAX_LIST);
-  return { documents: documents.map(driverServicePublicDocument), count: documents.length };
-}
-
-function driverServicePublicDocument(document) {
-  return {
-    id: document._id.toString(),
-    userId: document.userId.toString(),
-    vehicleId: document.vehicleId ? document.vehicleId.toString() : null,
-    kind: document.kind,
-    storageKey: document.storageKey || '',
-    originalName: document.originalName || '',
-    mimeType: document.mimeType || '',
-    verificationStatus: document.verificationStatus,
-    reviewedAt: document.reviewedAt,
-    reviewerUserId: document.reviewerUserId ? document.reviewerUserId.toString() : null,
-    rejectionReason: document.rejectionReason || '',
-    createdAt: document.createdAt,
-    updatedAt: document.updatedAt,
-  };
+  return { documents: documents.map(driverService.publicDocument), count: documents.length };
 }
 
 // Plan 030: admin file download — streams the stored bytes for verification.

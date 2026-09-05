@@ -1,5 +1,6 @@
 const express = require('express');
 const settingsService = require('../services/settingsService');
+const { sendError } = require('../utils/httpError');
 
 const router = express.Router();
 
@@ -13,7 +14,8 @@ router.get('/', async (req, res) => {
       settings: settingsService.publicPlatformSettings(settings),
     });
   } catch (err) {
-    return res.status(500).json({ error: 'server_error' });
+    // Empty map: unexpected codes still map to 500 server_error (plan 038).
+    return sendError(res, err, {});
   }
 });
 

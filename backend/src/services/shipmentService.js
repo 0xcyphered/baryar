@@ -2,6 +2,8 @@ const Cargo = require("../models/Cargo");
 const Shipment = require("../models/Shipment");
 const ShipmentEvent = require("../models/ShipmentEvent");
 const notificationService = require("./notificationService");
+const { fail } = require("../utils/httpError");
+const { assertId } = require("../utils/objectId");
 
 const MAX_LIST = 100;
 // eventType on custom events is driver-chosen; 'status_change' events are
@@ -26,16 +28,6 @@ const TRANSITIONS = {
   completed: [],
   cancelled: [],
 };
-
-function fail(code) {
-  const e = new Error(code);
-  e.code = code;
-  throw e;
-}
-
-function assertId(id, code) {
-  if (typeof id !== "string" || !/^[0-9a-fA-F]{24}$/.test(id)) fail(code);
-}
 
 function pickEventFields(body) {
   const out = {};

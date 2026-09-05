@@ -1,19 +1,7 @@
+const { fail } = require('../utils/httpError');
+const { pickFields } = require('../utils/pickFields');
+
 const PROFILE_FIELDS = ['name', 'email', 'nationalId'];
-
-function fail(code) {
-  const e = new Error(code);
-  e.code = code;
-  throw e;
-}
-
-function pickFields(body, keys) {
-  const out = {};
-  if (!body || typeof body !== 'object') return out;
-  for (const key of keys) {
-    if (body[key] !== undefined) out[key] = body[key];
-  }
-  return out;
-}
 
 function publicUser(user) {
   return {

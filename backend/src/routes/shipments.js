@@ -6,32 +6,22 @@ const shipmentService = require("../services/shipmentService");
 // cannot cycle (plan 037). Serializes the participant cargo read with the
 // same publicCargo used by owner CRUD and the matching list.
 const cargoService = require("../services/cargoService");
+const { requireDriver } = require("../middleware/requireRole");
+const { sendError } = require("../utils/httpError");
 
 const router = express.Router();
 
-function requireDriver(req, res, next) {
-  if (!req.user || !Array.isArray(req.user.roles) || !req.user.roles.includes("driver")) {
-    return res.status(403).json({ error: "forbidden" });
-  }
-  return next();
-}
+const SHIPMENT_ERRORS = {
+  invalid_shipment_id: 400,
+  invalid_cargo_id: 400,
+  validation_error: 400,
+  forbidden: 403,
+  not_found: 404,
+  invalid_status: 409,
+};
 
 function sendShipmentError(res, err) {
-  if (err && err.name === "ValidationError") {
-    return res.status(400).json({ error: "validation_error" });
-  }
-  const code = err && err.code;
-  const map = {
-    invalid_shipment_id: 400,
-    invalid_cargo_id: 400,
-    validation_error: 400,
-    forbidden: 403,
-    not_found: 404,
-    invalid_status: 409,
-  };
-  const status = map[code] || 500;
-  const error = map[code] ? code : "server_error";
-  return res.status(status).json({ error });
+  return sendError(res, err, SHIPMENT_ERRORS);
 }
 
 // Both owner and driver read shipments; transitions and event logging are

@@ -4,17 +4,12 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const OtpChallenge = require('../models/OtpChallenge');
 const { normalizeIranPhone } = require('../utils/phone');
+const { fail } = require('../utils/httpError');
 
 const CODE_TTL_MS = 5 * 60 * 1000;
 const RESEND_COOLDOWN_MS = 60 * 1000;
 const MAX_ATTEMPTS = 5;
 const BCRYPT_COST = 8;
-
-function otpError(code) {
-  const err = new Error(code);
-  err.code = code;
-  return err;
-}
 
 // Pluggable OTP channel. Phase 2 (SMS gateway, V6 §9) replaces this function
 // body only — the OtpChallenge store and HTTP contract stay as they are.
@@ -37,7 +32,7 @@ function pickPlaintextCode() {
 
 async function requestOtp({ phone: rawPhone }) {
   const phone = normalizeIranPhone(rawPhone);
-  if (!phone) throw otpError('invalid_phone');
+  if (!phone) fail('invalid_phone');
 
   const now = new Date();
   const live = await OtpChallenge.findOne({
@@ -48,7 +43,7 @@ async function requestOtp({ phone: rawPhone }) {
 
   if (live) {
     if (now.getTime() - live.createdAt.getTime() < RESEND_COOLDOWN_MS) {
-      throw otpError('otp_cooldown');
+      fail('otp_cooldown');
     }
     // Invalidate previous unused challenges for this phone, then issue a new one.
     await OtpChallenge.updateMany(
@@ -71,22 +66,22 @@ async function requestOtp({ phone: rawPhone }) {
 
 async function verifyOtp({ phone: rawPhone, code }) {
   const phone = normalizeIranPhone(rawPhone);
-  if (!phone) throw otpError('invalid_phone');
-  if (typeof code !== 'string' || !/^\d{6}$/.test(code)) throw otpError('otp_invalid');
+  if (!phone) fail('invalid_phone');
+  if (typeof code !== 'string' || !/^\d{6}$/.test(code)) fail('otp_invalid');
 
   const now = new Date();
   const challenge = await OtpChallenge.findOne({ phone, consumedAt: null }).sort({ createdAt: -1 });
-  if (!challenge) throw otpError('otp_invalid');
+  if (!challenge) fail('otp_invalid');
 
   if (challenge.expiresAt.getTime() <= now.getTime()) {
     challenge.consumedAt = now;
     await challenge.save();
-    throw otpError('otp_invalid');
+    fail('otp_invalid');
   }
   if (challenge.attemptCount >= MAX_ATTEMPTS) {
     challenge.consumedAt = now;
     await challenge.save();
-    throw otpError('otp_locked');
+    fail('otp_locked');
   }
 
   const matches = await bcrypt.compare(code, challenge.codeHash);
@@ -95,10 +90,10 @@ async function verifyOtp({ phone: rawPhone, code }) {
     if (challenge.attemptCount >= MAX_ATTEMPTS) {
       challenge.consumedAt = now;
       await challenge.save();
-      throw otpError('otp_locked');
+      fail('otp_locked');
     }
     await challenge.save();
-    throw otpError('otp_invalid');
+    fail('otp_invalid');
   }
 
   challenge.consumedAt = now;
@@ -106,7 +101,7 @@ async function verifyOtp({ phone: rawPhone, code }) {
 
   let user = await User.findOne({ phone });
   if (user && (user.status === 'blocked' || user.status === 'deleted')) {
-    throw otpError('account_blocked');
+    fail('account_blocked');
   }
 
   if (!user) {
@@ -117,7 +112,7 @@ async function verifyOtp({ phone: rawPhone, code }) {
   }
 
   const secret = process.env.JWT_SECRET;
-  if (!secret) throw otpError('server_misconfigured');
+  if (!secret) fail('server_misconfigured');
 
   const token = jwt.sign({ sub: user._id.toString(), phone: user.phone }, secret, { expiresIn: '7d' });
   return { user, token };
