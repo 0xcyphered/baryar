@@ -11,6 +11,7 @@ const offerRoutes = require('./routes/offers');
 const shipmentRoutes = require('./routes/shipments');
 const notificationRoutes = require('./routes/notifications');
 const adminRoutes = require('./routes/admin');
+const settingsRoutes = require('./routes/settings');
 
 function createApp() {
   const app = express();
@@ -43,6 +44,7 @@ function createApp() {
   });
 
   app.use('/api/auth', authRoutes);
+  app.use('/api/settings', settingsRoutes);
 
   app.use('/api/cargo', cargoRoutes);
 

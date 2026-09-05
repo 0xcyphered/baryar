@@ -1,6 +1,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { requestOtp, verifyOtp } = require('../services/otpService');
+const { publicUser, updateMe } = require('../services/userService');
 const { auth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -20,18 +21,6 @@ const authLimiter = rateLimit({
   },
 });
 
-function publicUser(user) {
-  return {
-    id: user._id.toString(),
-    phone: user.phone,
-    name: user.name || '',
-    email: user.email || '',
-    roles: user.roles,
-    status: user.status,
-    phoneVerifiedAt: user.phoneVerifiedAt,
-  };
-}
-
 function sendAuthError(res, err) {
   const code = err && err.code;
   const map = {
@@ -41,6 +30,8 @@ function sendAuthError(res, err) {
     otp_locked: 429,
     account_blocked: 403,
     server_misconfigured: 500,
+    unauthorized: 401,
+    validation_error: 400,
   };
   const status = map[code] || 500;
   const error = map[code] ? code : 'server_error';
@@ -70,6 +61,15 @@ router.post('/verify-otp', authLimiter, async (req, res) => {
 
 router.get('/me', auth, async (req, res) => {
   return res.status(200).json({ user: publicUser(req.user) });
+});
+
+router.patch('/me', auth, async (req, res) => {
+  try {
+    const user = await updateMe({ user: req.user, body: req.body });
+    return res.status(200).json({ user: publicUser(user) });
+  } catch (err) {
+    return sendAuthError(res, err);
+  }
 });
 
 module.exports = router;

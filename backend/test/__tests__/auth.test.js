@@ -62,7 +62,7 @@ describe('auth OTP', () => {
     expect(res.body.user.status).toBe('active');
     expect(res.body.user.id).toMatch(/^[0-9a-f]{24}$/);
     expect(Object.keys(res.body.user).sort()).toEqual([
-      'email', 'id', 'name', 'phone', 'phoneVerifiedAt', 'roles', 'status',
+      'email', 'id', 'name', 'nationalId', 'phone', 'phoneVerifiedAt', 'roles', 'status',
     ]);
 
     const user = await User.findOne({ phone: CANON });
@@ -172,5 +172,99 @@ describe('auth OTP', () => {
     const res = await request(app).get('/health');
     expect(res.status).toBe(200);
     expect(res.body.service).toBe('baryar-api');
+  });
+});
+
+describe('auth profile', () => {
+  const app = createApp();
+
+  beforeAll(() => {
+    process.env.JWT_SECRET = 'test-secret-do-not-use';
+    process.env.OTP_FIXED_CODE = FIXED_CODE;
+    process.env.NODE_ENV = 'test';
+  });
+
+  async function register() {
+    await request(app).post('/api/auth/request-otp').send({ phone: PHONE });
+    const verify = await request(app).post('/api/auth/verify-otp').send({ phone: PHONE, code: FIXED_CODE });
+    expect(verify.status).toBe(200);
+    return verify.body.token;
+  }
+
+  test('PATCH /api/auth/me requires a bearer token', async () => {
+    const res = await request(app).patch('/api/auth/me').send({ name: 'Ali' });
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: 'unauthorized' });
+  });
+
+  test('PATCH /api/auth/me rejects a garbage bearer token', async () => {
+    const res = await request(app)
+      .patch('/api/auth/me')
+      .set('Authorization', 'Bearer not-a-real-token')
+      .send({ name: 'Ali' });
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: 'unauthorized' });
+  });
+
+  test('PATCH /api/auth/me updates name, email, and nationalId and persists them', async () => {
+    const token = await register();
+    const res = await request(app)
+      .patch('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Ali Reza', email: 'Ali@Example.com', nationalId: '0071234567' });
+    expect(res.status).toBe(200);
+    expect(res.body.user.name).toBe('Ali Reza');
+    expect(res.body.user.email).toBe('ali@example.com');
+    expect(res.body.user.nationalId).toBe('0071234567');
+
+    const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`);
+    expect(me.status).toBe(200);
+    expect(me.body.user.name).toBe('Ali Reza');
+    expect(me.body.user.email).toBe('ali@example.com');
+    expect(me.body.user.nationalId).toBe('0071234567');
+  });
+
+  test('PATCH /api/auth/me cannot change roles, status, or phone', async () => {
+    const token = await register();
+    const res = await request(app)
+      .patch('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ roles: ['admin'], status: 'blocked', phone: '09120000000' });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'validation_error' });
+
+    const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`);
+    expect(me.status).toBe(200);
+    expect(me.body.user.roles).toEqual(['cargo_owner']);
+    expect(me.body.user.status).toBe('active');
+    expect(me.body.user.phone).toBe(CANON);
+  });
+
+  test('PATCH /api/auth/me applies allowlisted fields even when mixed with protected ones', async () => {
+    const token = await register();
+    const res = await request(app)
+      .patch('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'x', roles: ['admin'] });
+    expect(res.status).toBe(200);
+    expect(res.body.user.name).toBe('x');
+    expect(res.body.user.roles).toEqual(['cargo_owner']);
+  });
+
+  test('PATCH /api/auth/me with an empty name clears it', async () => {
+    const token = await register();
+    const set = await request(app)
+      .patch('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Ali Reza' });
+    expect(set.status).toBe(200);
+    expect(set.body.user.name).toBe('Ali Reza');
+
+    const res = await request(app)
+      .patch('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: '' });
+    expect(res.status).toBe(200);
+    expect(res.body.user.name).toBe('');
   });
 });

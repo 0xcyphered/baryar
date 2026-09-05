@@ -17,6 +17,17 @@ function publicSettings(doc) {
   };
 }
 
+// Public/user-facing subset: strips admin-only knobs
+// (maxActiveCargoPerOwner, maintenanceMode) so they never leave the API on a
+// public endpoint. Enforcement of those knobs is plan 029's job.
+function publicPlatformSettings(doc) {
+  return {
+    platformName: doc.platformName || '',
+    supportPhone: doc.supportPhone || '',
+    defaultCurrency: doc.defaultCurrency || 'IRR',
+  };
+}
+
 async function getSettings() {
   const doc = await SystemSettings.findOneAndUpdate(
     { key: 'global' },
@@ -56,4 +67,4 @@ async function putSettings(body) {
   return doc;
 }
 
-module.exports = { getSettings, putSettings, publicSettings };
+module.exports = { getSettings, putSettings, publicSettings, publicPlatformSettings };
