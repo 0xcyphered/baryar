@@ -12,4 +12,7 @@ const DEV_API_BASE =
     ? 'http://10.0.2.2:4000'
     : 'http://localhost:4000';
 
-export const API_BASE = DEV_API_BASE;
+// Set at bundle time, e.g.:
+//   EXPO_PUBLIC_API_BASE=http://192.168.1.20:4000 yarn build:apk
+// (the machine running the backend must be reachable from the phone).
+export const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? DEV_API_BASE;
