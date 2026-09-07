@@ -35,6 +35,7 @@ import OffersScreen from './src/screens/OffersScreen';
 import ShipmentListScreen from './src/screens/ShipmentListScreen';
 import ShipmentDetailScreen from './src/screens/ShipmentDetailScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
+import RoleChoiceScreen from './src/screens/RoleChoiceScreen';
 import LocationPickerScreen from './src/screens/LocationPickerScreen';
 import DriverOnboardingScreen from './src/screens/DriverOnboardingScreen';
 import DriverVehiclesScreen from './src/screens/DriverVehiclesScreen';
@@ -44,7 +45,7 @@ import SubmitOfferScreen from './src/screens/SubmitOfferScreen';
 import DriverOffersScreen from './src/screens/DriverOffersScreen';
 import DriverShipmentDetailScreen from './src/screens/DriverShipmentDetailScreen';
 
-import type { MapMode, SegmentDistance, Waypoint } from './src/types';
+import type { AppRole, MapMode, SegmentDistance, Waypoint } from './src/types';
 import {
   computeSegments,
 } from './src/utils/distance';
@@ -93,6 +94,7 @@ export type CargoStackParamList = {
 export type ShipmentStackParamList = {
   ShipmentList: undefined;
   ShipmentDetail: { shipmentId: string };
+  CreateCargo: undefined;
 };
 
 export type DriverStackParamList = {
@@ -109,6 +111,17 @@ export type DriverStackParamList = {
 export type RootStackParamList = {
   MainTabs: undefined;
   Profile: undefined;
+  RoleChoice: undefined;
+};
+
+// Plan 040: which tabs are visible per experience mode, in bar order
+// (first entry = initial tab). Lives here because MainTabParamList is
+// defined in this file (moving it to navigation/types.ts would create an
+// import cycle — that file re-exports from here).
+export const ROLE_TABS: Record<AppRole, readonly (keyof MainTabParamList)[]> = {
+  user: ['MapTab', 'ShipmentsTab', 'NotificationsTab'],
+  cargo_owner: ['MapTab', 'CargoTab', 'ShipmentsTab', 'NotificationsTab'],
+  driver: ['MapTab', 'DriverTab', 'ShipmentsTab', 'NotificationsTab'],
 };
 
 // --- Nested stack screens ---
@@ -142,6 +155,9 @@ function ShipmentStackScreen() {
     <S.Navigator screenOptions={{ headerShown: false }}>
       <S.Screen name="ShipmentList" component={ShipmentListScreen} />
       <S.Screen name="ShipmentDetail" component={ShipmentDetailScreen} />
+      {/* Plan 040: user-mode keeps §1 "submitting transport requests"
+          reachable from the حمل‌ونقل tab. */}
+      <S.Screen name="CreateCargo" component={CreateCargoScreen} />
     </S.Navigator>
   );
 }
@@ -247,10 +263,36 @@ function DriverStackScreen() {
 
 // --- Main tab navigator ---
 
+// Plan 040: label + icon per tab (mapped from ROLE_TABS[activeRole]).
+const TAB_CONFIG: Record<
+  keyof MainTabParamList,
+  { label: string; icon: keyof typeof Ionicons.glyphMap }
+> = {
+  MapTab: { label: 'نقشه', icon: 'map-outline' },
+  CargoTab: { label: 'بارها', icon: 'cube-outline' },
+  DriverTab: { label: 'رانندگی', icon: 'car-sport-outline' },
+  ShipmentsTab: { label: 'حمل‌ونقل', icon: 'car-outline' },
+  NotificationsTab: { label: 'اعلان‌ها', icon: 'notifications-outline' },
+};
+
+const TAB_COMPONENTS: Record<keyof MainTabParamList, React.ComponentType<any>> = {
+  MapTab: MapStackScreen,
+  CargoTab: CargoStackScreen,
+  DriverTab: DriverStackScreen,
+  ShipmentsTab: ShipmentStackScreen,
+  NotificationsTab: NotificationsScreen,
+};
+
 function MainTabs() {
+  const { activeRole } = useAuth();
+  const role: AppRole = activeRole ?? 'cargo_owner';
   const Tabs = createBottomTabNavigator<MainTabParamList>();
   return (
+    // key={role} forces a remount when the mode changes —
+    // initialRouteName only applies on mount.
     <Tabs.Navigator
+      key={role}
+      initialRouteName={ROLE_TABS[role][0]}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: COLORS.blue,
@@ -259,46 +301,19 @@ function MainTabs() {
         tabBarLabelStyle: { fontFamily: 'Vazirmatn_500Medium', fontSize: 11 },
       }}
     >
-      <Tabs.Screen
-        name="MapTab"
-        component={MapStackScreen}
-        options={{
-          tabBarLabel: 'نقشه',
-          tabBarIcon: ({ color, size }) => <Ionicons name="map-outline" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="CargoTab"
-        component={CargoStackScreen}
-        options={{
-          tabBarLabel: 'بارها',
-          tabBarIcon: ({ color, size }) => <Ionicons name="cube-outline" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="DriverTab"
-        component={DriverStackScreen}
-        options={{
-          tabBarLabel: 'رانندگی',
-          tabBarIcon: ({ color, size }) => <Ionicons name="car-sport-outline" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="ShipmentsTab"
-        component={ShipmentStackScreen}
-        options={{
-          tabBarLabel: 'حمل‌ونقل',
-          tabBarIcon: ({ color, size }) => <Ionicons name="car-outline" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="NotificationsTab"
-        component={NotificationsScreen}
-        options={{
-          tabBarLabel: 'اعلان‌ها',
-          tabBarIcon: ({ color, size }) => <Ionicons name="notifications-outline" size={size} color={color} />,
-        }}
-      />
+      {ROLE_TABS[role].map((tabName) => (
+        <Tabs.Screen
+          key={tabName}
+          name={tabName}
+          component={TAB_COMPONENTS[tabName]}
+          options={{
+            tabBarLabel: TAB_CONFIG[tabName].label,
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name={TAB_CONFIG[tabName].icon} size={size} color={color} />
+            ),
+          }}
+        />
+      ))}
     </Tabs.Navigator>
   );
 }
@@ -306,7 +321,7 @@ function MainTabs() {
 // --- Root navigator ---
 
 function AppNavigator() {
-  const { user, isLoading } = useAuth();
+  const { user, activeRole, isLoading } = useAuth();
   const AuthStack = createNativeStackNavigator<AuthStackParamList>();
   const RootStack = createNativeStackNavigator<RootStackParamList>();
 
@@ -337,6 +352,20 @@ function AppNavigator() {
           )}
         </AuthStack.Screen>
       </AuthStack.Navigator>
+    );
+  }
+
+  // Plan 040: first open after login with no stored choice → role
+  // selection. setActiveRole flips context state, so the navigator
+  // re-renders to MainTabs on its own; onDone stays for future side
+  // effects.
+  if (!activeRole) {
+    return (
+      <RootStack.Navigator screenOptions={{ headerShown: false }}>
+        <RootStack.Screen name="RoleChoice">
+          {() => <RoleChoiceScreen onDone={() => {}} />}
+        </RootStack.Screen>
+      </RootStack.Navigator>
     );
   }
 

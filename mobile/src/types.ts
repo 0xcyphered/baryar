@@ -28,6 +28,9 @@ export interface SegmentDistance {
 
 export type MapMode = 'explore' | 'measure';
 
+/** Client-side experience mode. NOT a backend role. */
+export type AppRole = 'user' | 'cargo_owner' | 'driver';
+
 export interface UserProfile {
   id: string;
   phone: string;

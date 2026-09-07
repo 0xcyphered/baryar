@@ -1,6 +1,46 @@
 // Shared label, color, and format helpers extracted from screen files.
 // Move-only refactor (plan 034): every value is byte-identical to its source.
 
+import { COLORS } from '../theme';
+import type { AppRole } from '../types';
+
+// ─── App experience modes (plan 040) ─────────────────────────────
+// Presentation-layer only — backend roles are never mutated from here.
+export const ROLE_META: Record<
+  AppRole,
+  { label: string; tagline: string; icon: string; color: string; tint: string }
+> = {
+  user: {
+    label: 'کاربر',
+    tagline: 'ارسال درخواست حمل و پیگیری مرسولات',
+    icon: 'person-outline',
+    color: COLORS.blue,
+    tint: 'rgba(59, 130, 246, 0.12)',
+  },
+  cargo_owner: {
+    label: 'صاحب کالا',
+    tagline: 'ثبت بار، دریافت پیشنهاد و انتخاب شرکت حمل',
+    icon: 'cube-outline',
+    color: COLORS.green,
+    tint: 'rgba(34, 197, 94, 0.12)',
+  },
+  driver: {
+    label: 'راننده',
+    tagline: 'یافتن بار و مدیریت سفرهای حمل',
+    icon: 'car-sport-outline',
+    color: COLORS.red,
+    tint: 'rgba(239, 68, 68, 0.12)',
+  },
+};
+
+export const APP_ROLE_ORDER: readonly AppRole[] = ['user', 'cargo_owner', 'driver'];
+
+export const ACTIVE_ROLE_LABEL: Record<AppRole, string> = {
+  user: 'حالت کاربر',
+  cargo_owner: 'حالت صاحب کالا',
+  driver: 'حالت رانندگی',
+};
+
 // ─── Cargo status ────────────────────────────────────────────────
 export const CARGO_STATUS_COLORS: Record<string, string> = {
   draft: '#9ca3af',

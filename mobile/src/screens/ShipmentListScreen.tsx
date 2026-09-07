@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import { listShipments } from '../services/shipmentsApi';
+import { hapticLight } from '../utils/haptics';
 import type { Shipment } from '../types';
 import { SHIPMENT_STATUS_COLORS, SHIPMENT_STATUS_LABELS } from '../utils/constants';
 
@@ -65,6 +66,19 @@ export default function ShipmentListScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>حمل‌ونقل‌ها</Text>
       </View>
+
+      {/* Plan 040: §1 user-mode keeps "submitting transport requests"
+          reachable from this tab (opens CreateCargo in this stack). */}
+      <Pressable
+        style={({ pressed }) => [styles.newRequestCta, pressed && { opacity: 0.92 }]}
+        onPress={() => {
+          hapticLight();
+          navigation.navigate('CreateCargo' as never);
+        }}
+      >
+        <Ionicons name="add-circle-outline" size={20} color={COLORS.white} />
+        <Text style={styles.newRequestCtaText}>ثبت درخواست حمل</Text>
+      </Pressable>
 
       {/* Filter chips */}
       <FlatList
@@ -152,6 +166,22 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontFamily: 'Vazirmatn_700Bold',
     color: COLORS.textDark,
+  },
+  newRequestCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.blue,
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    paddingVertical: 12,
+  },
+  newRequestCtaText: {
+    fontSize: 14,
+    fontFamily: 'Vazirmatn_500Medium',
+    color: COLORS.white,
   },
   filterRow: {
     paddingHorizontal: 16,

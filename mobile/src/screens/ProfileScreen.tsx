@@ -13,6 +13,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { getPublicSettings } from '../services/settingsApi';
+import { hapticLight } from '../utils/haptics';
+import { ACTIVE_ROLE_LABEL, APP_ROLE_ORDER, ROLE_META } from '../utils/constants';
 import type { PublicPlatformSettings } from '../types';
 import { COLORS } from '../theme';
 
@@ -21,7 +23,7 @@ interface Props {
 }
 
 export default function ProfileScreen({ onBack }: Props) {
-  const { user, signOut, updateProfile } = useAuth();
+  const { user, signOut, updateProfile, activeRole, setActiveRole } = useAuth();
   const insets = useSafeAreaInsets();
 
   // Edit mode
@@ -178,6 +180,43 @@ export default function ProfileScreen({ onBack }: Props) {
           <Text style={styles.editButtonText}>ویرایش پروفایل</Text>
         </Pressable>
       )}
+
+      {/* Plan 040: experience-mode switcher (client-side only) */}
+      <View style={styles.roleSection}>
+        <Text style={styles.roleSectionTitle}>حالت استفاده</Text>
+        {APP_ROLE_ORDER.map((role) => {
+          const meta = ROLE_META[role];
+          const isActive = activeRole === role;
+          return (
+            <Pressable
+              key={role}
+              style={({ pressed }) => [
+                styles.roleRow,
+                isActive && styles.roleRowActive,
+                pressed && { opacity: 0.9 },
+              ]}
+              onPress={() => {
+                hapticLight();
+                void setActiveRole(role);
+              }}
+            >
+              <View style={[styles.roleIconCircle, { backgroundColor: meta.tint }]}>
+                <Ionicons name={meta.icon as never} size={20} color={meta.color} />
+              </View>
+              <View style={styles.roleTextWrap}>
+                <Text style={styles.roleRowTitle}>{meta.label}</Text>
+                <Text style={styles.roleRowTagline}>{meta.tagline}</Text>
+              </View>
+              {isActive ? (
+                <Ionicons name="checkmark-circle" size={22} color={meta.color} />
+              ) : (
+                <Ionicons name="ellipse-outline" size={22} color={COLORS.gray} />
+              )}
+            </Pressable>
+          );
+        })}
+        <Text style={styles.roleHint}>{ACTIVE_ROLE_LABEL[activeRole ?? 'cargo_owner']} فعال است</Text>
+      </View>
 
       {/* Support block */}
       {settings?.supportPhone ? (
@@ -350,6 +389,61 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Vazirmatn_500Medium',
     color: COLORS.textMid,
+  },
+  // Plan 040: experience-mode switcher
+  roleSection: {
+    backgroundColor: COLORS.grayLight,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  roleSectionTitle: {
+    fontSize: 15,
+    fontFamily: 'Vazirmatn_700Bold',
+    color: COLORS.textDark,
+    marginBottom: 12,
+  },
+  roleRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: COLORS.white,
+  },
+  roleRowActive: {
+    borderColor: COLORS.blue,
+  },
+  roleIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roleTextWrap: {
+    flex: 1,
+  },
+  roleRowTitle: {
+    fontSize: 14,
+    fontFamily: 'Vazirmatn_500Medium',
+    color: COLORS.textDark,
+  },
+  roleRowTagline: {
+    fontSize: 12,
+    fontFamily: 'Vazirmatn_400Regular',
+    color: COLORS.textMid,
+    marginTop: 2,
+  },
+  roleHint: {
+    fontSize: 11,
+    fontFamily: 'Vazirmatn_400Regular',
+    color: COLORS.gray,
+    textAlign: 'center',
+    marginTop: 2,
   },
   supportRow: {
     flexDirection: 'row-reverse',
