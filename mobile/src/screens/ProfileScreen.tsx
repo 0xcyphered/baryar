@@ -13,10 +13,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { getPublicSettings } from '../services/settingsApi';
-import { hapticLight } from '../utils/haptics';
+import { hapticLight, hapticSuccess, hapticWarning } from '../utils/haptics';
 import { ACTIVE_ROLE_LABEL, APP_ROLE_ORDER, ROLE_META } from '../utils/constants';
 import type { PublicPlatformSettings } from '../types';
-import { COLORS } from '../theme';
+import { COLORS, font, radii, shadows, space, textStyles } from '../theme';
 
 interface Props {
   onBack: () => void;
@@ -52,6 +52,7 @@ export default function ProfileScreen({ onBack }: Props) {
   }, []);
 
   const startEditing = () => {
+    hapticLight();
     setName(user?.name || '');
     setEmail(user?.email || '');
     setNationalId(user?.nationalId || '');
@@ -64,6 +65,7 @@ export default function ProfileScreen({ onBack }: Props) {
     setSaveError(null);
     try {
       await updateProfile({ name, email, nationalId });
+      hapticSuccess();
       setEditing(false);
     } catch (err: any) {
       if (err && err.error === 'validation_error') {
@@ -76,11 +78,25 @@ export default function ProfileScreen({ onBack }: Props) {
     }
   };
 
+  const handleLogout = () => {
+    hapticWarning();
+    Alert.alert('خروج از حساب', 'آیا مطمئن هستید؟', [
+      { text: 'انصراف', style: 'cancel' },
+      { text: 'خروج', style: 'destructive', onPress: () => signOut() },
+    ]);
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={onBack}>
+        <Pressable
+          style={styles.backButton}
+          onPress={() => {
+            hapticLight();
+            onBack();
+          }}
+        >
           <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} />
         </Pressable>
         <Text style={styles.headerTitle}>پروفایل</Text>
@@ -164,18 +180,33 @@ export default function ProfileScreen({ onBack }: Props) {
               disabled={saving}
             >
               {saving ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator size="small" color={COLORS.white} />
               ) : (
                 <Text style={styles.saveButtonText}>ذخیره</Text>
               )}
             </Pressable>
-            <Pressable style={styles.cancelButton} onPress={() => setEditing(false)}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.cancelButton,
+                pressed && { opacity: 0.85 },
+              ]}
+              onPress={() => {
+                hapticLight();
+                setEditing(false);
+              }}
+            >
               <Text style={styles.cancelButtonText}>انصراف</Text>
             </Pressable>
           </View>
         </View>
       ) : (
-        <Pressable style={styles.editButton} onPress={startEditing}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.editButton,
+            pressed && { opacity: 0.85 },
+          ]}
+          onPress={startEditing}
+        >
           <Ionicons name="create-outline" size={18} color={COLORS.blue} />
           <Text style={styles.editButtonText}>ویرایش پروفایل</Text>
         </Pressable>
@@ -221,8 +252,14 @@ export default function ProfileScreen({ onBack }: Props) {
       {/* Support block */}
       {settings?.supportPhone ? (
         <Pressable
-          style={styles.supportRow}
-          onPress={() => Linking.openURL(`tel:${settings.supportPhone}`)}
+          style={({ pressed }) => [
+            styles.supportRow,
+            pressed && { opacity: 0.85 },
+          ]}
+          onPress={() => {
+            hapticLight();
+            Linking.openURL(`tel:${settings.supportPhone}`);
+          }}
         >
           <Ionicons name="call-outline" size={20} color={COLORS.textMid} />
           <Text style={styles.supportLabel}>پشتیبانی</Text>
@@ -231,7 +268,13 @@ export default function ProfileScreen({ onBack }: Props) {
       ) : null}
 
       {/* Logout */}
-      <Pressable style={styles.logoutButton} onPress={signOut}>
+      <Pressable
+        style={({ pressed }) => [
+          styles.logoutButton,
+          pressed && { opacity: 0.85 },
+        ]}
+        onPress={handleLogout}
+      >
         <Ionicons name="log-out-outline" size={20} color={COLORS.red} />
         <Text style={styles.logoutText}>خروج از حساب</Text>
       </Pressable>
@@ -264,7 +307,7 @@ function InfoRow({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.bgWarm,
     paddingHorizontal: 24,
   },
   header: {
@@ -280,9 +323,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
-    fontFamily: 'Vazirmatn_700Bold',
-    color: COLORS.textDark,
+    ...textStyles.h2,
   },
   avatarSection: {
     alignItems: 'center',
@@ -296,126 +337,121 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
+    ...shadows.sm,
   },
   userName: {
-    fontSize: 18,
-    fontFamily: 'Vazirmatn_700Bold',
-    color: COLORS.textDark,
+    ...textStyles.h2,
     marginBottom: 4,
   },
   userPhone: {
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
+    ...textStyles.body,
     color: COLORS.textMid,
   },
   infoSection: {
-    backgroundColor: COLORS.grayLight,
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
-    marginBottom: 16,
+    backgroundColor: COLORS.white,
+    borderRadius: radii.lg,
+    padding: space[4],
+    gap: space[3],
+    marginBottom: space[4],
+    ...shadows.sm,
   },
   editButton: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 12,
+    gap: space[2],
+    paddingVertical: space[3],
+    borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: COLORS.blue,
-    marginBottom: 16,
+    marginBottom: space[4],
   },
   editButtonText: {
-    fontSize: 15,
-    fontFamily: 'Vazirmatn_500Medium',
+    ...textStyles.bodyMedium,
     color: COLORS.blue,
   },
   editSection: {
-    backgroundColor: COLORS.grayLight,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: COLORS.white,
+    borderRadius: radii.lg,
+    padding: space[4],
+    marginBottom: space[4],
+    ...shadows.sm,
   },
   editLabel: {
     fontSize: 13,
-    fontFamily: 'Vazirmatn_500Medium',
+    fontFamily: font.medium,
     color: COLORS.textDark,
     marginBottom: 4,
     marginTop: 8,
   },
   editInput: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    backgroundColor: COLORS.grayLight,
+    borderRadius: radii.md,
+    paddingHorizontal: space[3],
     paddingVertical: 10,
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
-    color: COLORS.textDark,
+    ...textStyles.body,
   },
   saveError: {
-    fontSize: 12,
-    fontFamily: 'Vazirmatn_400Regular',
+    ...textStyles.caption,
     color: COLORS.red,
-    marginTop: 8,
+    marginTop: space[2],
   },
   editButtons: {
     flexDirection: 'row-reverse',
-    gap: 8,
-    marginTop: 12,
+    gap: space[2],
+    marginTop: space[3],
   },
   saveButton: {
     flex: 1,
     backgroundColor: COLORS.blue,
-    borderRadius: 10,
-    paddingVertical: 12,
+    borderRadius: radii.md,
+    paddingVertical: space[3],
     alignItems: 'center',
   },
   buttonDisabled: { opacity: 0.6 },
   saveButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_700Bold',
+    ...textStyles.buttonSmall,
+    color: COLORS.white,
   },
   cancelButton: {
     flex: 1,
-    borderRadius: 10,
-    paddingVertical: 12,
+    borderRadius: radii.md,
+    paddingVertical: space[3],
     alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.gray,
   },
   cancelButtonText: {
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_500Medium',
+    ...textStyles.bodyMedium,
     color: COLORS.textMid,
   },
   // Plan 040: experience-mode switcher
   roleSection: {
-    backgroundColor: COLORS.grayLight,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: COLORS.white,
+    borderRadius: radii.lg,
+    padding: space[4],
+    marginBottom: space[4],
+    ...shadows.sm,
   },
   roleSectionTitle: {
-    fontSize: 15,
-    fontFamily: 'Vazirmatn_700Bold',
+    ...textStyles.bodyMedium,
     color: COLORS.textDark,
-    marginBottom: 12,
+    marginBottom: space[3],
   },
   roleRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
+    gap: space[3],
+    backgroundColor: COLORS.grayLight,
+    borderRadius: radii.md,
+    padding: space[3],
+    marginBottom: space[2],
     borderWidth: 2,
     borderColor: COLORS.white,
   },
   roleRowActive: {
     borderColor: COLORS.blue,
+    backgroundColor: COLORS.white,
   },
   roleIconCircle: {
     width: 40,
@@ -428,57 +464,52 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   roleRowTitle: {
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_500Medium',
+    ...textStyles.bodyMedium,
     color: COLORS.textDark,
   },
   roleRowTagline: {
-    fontSize: 12,
-    fontFamily: 'Vazirmatn_400Regular',
+    ...textStyles.caption,
     color: COLORS.textMid,
     marginTop: 2,
   },
   roleHint: {
-    fontSize: 11,
-    fontFamily: 'Vazirmatn_400Regular',
-    color: COLORS.gray,
+    ...textStyles.small,
     textAlign: 'center',
     marginTop: 2,
   },
   supportRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: COLORS.grayLight,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 16,
+    gap: space[2] + 2,
+    backgroundColor: COLORS.white,
+    borderRadius: radii.lg,
+    padding: space[3] + 2,
+    marginBottom: space[4],
+    ...shadows.xs,
   },
   supportLabel: {
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
+    ...textStyles.body,
     color: COLORS.textMid,
     flex: 1,
   },
   supportValue: {
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_500Medium',
+    ...textStyles.bodyMedium,
     color: COLORS.blue,
   },
   logoutButton: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
+    gap: space[2],
+    paddingVertical: space[3] + 2,
+    borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: COLORS.red,
   },
   logoutText: {
-    fontSize: 16,
-    fontFamily: 'Vazirmatn_500Medium',
+    ...textStyles.bodyMedium,
     color: COLORS.red,
+    fontSize: 16,
   },
 });
 
@@ -486,17 +517,15 @@ const infoStyles = StyleSheet.create({
   row: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    gap: 12,
+    gap: space[3],
   },
   label: {
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
+    ...textStyles.body,
     color: COLORS.textMid,
     flex: 1,
   },
   value: {
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_500Medium',
+    ...textStyles.bodyMedium,
     color: COLORS.textDark,
     direction: 'ltr',
   },

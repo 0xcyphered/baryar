@@ -60,7 +60,6 @@ export default function Button({
       ]}
       onPress={isActive ? onPress : undefined}
       disabled={!isActive}
-      activeOpacity={0.8}
     >
       {loading ? (
         <ActivityIndicator color={variant === 'secondary' ? COLORS.blue : COLORS.white} size="small" />
