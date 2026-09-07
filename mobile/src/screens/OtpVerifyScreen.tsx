@@ -10,7 +10,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
-import { COLORS } from '../theme';
+import { COLORS, font, radii, shadows, space } from '../theme';
+import { hapticLight } from '../utils/haptics';
 
 interface Props {
   phone: string;
@@ -30,73 +31,102 @@ export default function OtpVerifyScreen({ phone, onBack }: Props) {
       setError('کد تأیید را وارد کنید');
       return;
     }
+    hapticLight();
     setError(null);
     setLoading(true);
     try {
       await verifyOtp(phone, trimmed);
-      // AuthContext state change will re-render the app into the main screen.
     } catch (err: unknown) {
       const msg =
         err && typeof err === 'object' && 'error' in err
           ? (err as { error: string }).error
           : 'خطای سرور';
-      if (msg === 'otp_invalid') {
-        setError('کد وارد شده صحیح نیست');
-      } else if (msg === 'otp_locked') {
-        setError('تعداد تلاش‌ها بیش از حد مجاز است');
-      } else if (msg === 'account_blocked') {
-        setError('حساب شما مسدود شده است');
-      } else {
-        setError('خطا در تأیید کد');
-      }
+      if (msg === 'otp_invalid') setError('کد وارد شده صحیح نیست');
+      else if (msg === 'otp_locked') setError('تعداد تلاش‌ها بیش از حد مجاز است');
+      else if (msg === 'account_blocked') setError('حساب شما مسدود شده است');
+      else setError('خطا در تأیید کد');
     } finally {
       setLoading(false);
     }
   };
 
+  const maskedPhone = phone.replace(/(\d{2})\d+(\d{2})/, '$1****$2');
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 40 }]}>
-      <Pressable style={styles.backButton} onPress={onBack}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Back button */}
+      <Pressable style={[styles.backBtn, { marginTop: insets.top + space[3] }]} onPress={onBack}>
         <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} />
       </Pressable>
 
-      <View style={styles.iconWrap}>
-        <Ionicons name="keypad-outline" size={48} color={COLORS.blue} />
+      {/* Hero */}
+      <View style={styles.hero}>
+        <View style={styles.heroCircle}>
+          <Ionicons name="keypad-outline" size={36} color={COLORS.white} />
+        </View>
+        <Text style={styles.heroTitle}>تأیید شماره</Text>
+        <Text style={styles.heroSubtitle}>
+          کد ۶ رقمی ارسال شده به
+        </Text>
+        <Text style={styles.phoneText}>{maskedPhone}</Text>
       </View>
 
-      <Text style={styles.title}>کد تأیید</Text>
-      <Text style={styles.subtitle}>
-        کد ۶ رقمی ارسال شده به{'\n'}
-        <Text style={styles.phone}>{phone}</Text>
-      </Text>
+      {/* Code input */}
+      <View style={styles.card}>
+        <TextInput
+          style={styles.codeInput}
+          value={code}
+          onChangeText={(t) => {
+            setCode(t);
+            if (error) setError(null);
+          }}
+          placeholder="·  ·  ·  ·  ·  ·"
+          placeholderTextColor={COLORS.gray}
+          keyboardType="number-pad"
+          maxLength={6}
+          autoFocus
+          returnKeyType="done"
+          onSubmitEditing={handleVerify}
+          textAlign="center"
+        />
 
-      <TextInput
-        style={styles.input}
-        value={code}
-        onChangeText={setCode}
-        placeholder="------"
-        placeholderTextColor={COLORS.gray}
-        keyboardType="number-pad"
-        maxLength={6}
-        autoFocus
-        returnKeyType="done"
-        onSubmitEditing={handleVerify}
-        textAlign="center"
-      />
+        {/* Dot indicators */}
+        <View style={styles.dotRow}>
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <View
+              key={i}
+              style={[styles.dot, i < code.length && styles.dotActive]}
+            />
+          ))}
+        </View>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? (
+          <View style={styles.errorRow}>
+            <Ionicons name="alert-circle" size={14} color={COLORS.red} />
+            <Text style={styles.error}>{error}</Text>
+          </View>
+        ) : null}
 
-      <Pressable
-        style={[styles.button, loading && styles.buttonDisabled]}
-        onPress={handleVerify}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color={COLORS.white} size="small" />
-        ) : (
-          <Text style={styles.buttonText}>تأیید</Text>
-        )}
-      </Pressable>
+        <Pressable
+          style={({ pressed }) => [
+            styles.button,
+            loading && styles.buttonDisabled,
+            pressed && !loading && { opacity: 0.92, transform: [{ scale: 0.98 }] },
+          ]}
+          onPress={handleVerify}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color={COLORS.white} size="small" />
+          ) : (
+            <Text style={styles.buttonText}>ورود</Text>
+          )}
+        </Pressable>
+
+        <Text style={styles.hint}>
+          کدی دریافت نکردید؟ بعد از ۶۰ ثانیه امتحان کنید
+        </Text>
+      </View>
     </View>
   );
 }
@@ -104,72 +134,118 @@ export default function OtpVerifyScreen({ phone, onBack }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
-    paddingHorizontal: 24,
+    backgroundColor: COLORS.bg,
   },
-  backButton: {
-    width: 40,
-    height: 40,
+  backBtn: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginLeft: space[4],
   },
-  iconWrap: {
+  hero: {
     alignItems: 'center',
-    marginBottom: 24,
+    paddingTop: space[6],
+    paddingBottom: space[5],
   },
-  title: {
-    fontSize: 24,
-    fontFamily: 'Vazirmatn_700Bold',
+  heroCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: COLORS.blue,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: space[4],
+    ...shadows.lg,
+  },
+  heroTitle: {
+    fontSize: 22,
+    fontFamily: font.bold,
     color: COLORS.textDark,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: space[2],
   },
-  subtitle: {
+  heroSubtitle: {
     fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.textMid,
     textAlign: 'center',
-    marginBottom: 32,
-    lineHeight: 22,
   },
-  phone: {
-    fontFamily: 'Vazirmatn_500Medium',
-    color: COLORS.textDark,
+  phoneText: {
+    fontSize: 18,
+    fontFamily: font.bold,
+    color: COLORS.blue,
     direction: 'ltr',
+    marginTop: space[1],
+    letterSpacing: 2,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: COLORS.gray,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 24,
-    fontFamily: 'Vazirmatn_500Medium',
+  card: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    paddingTop: space[8],
+    paddingHorizontal: space[5],
+    marginTop: space[4],
+    alignItems: 'center',
+    ...shadows.lg,
+  },
+  codeInput: {
+    width: '100%',
+    height: 56,
+    fontSize: 28,
+    fontFamily: font.bold,
     color: COLORS.textDark,
-    letterSpacing: 8,
-    marginBottom: 8,
+    letterSpacing: 12,
+    marginBottom: space[3],
+  },
+  dotRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: space[4],
+  },
+  dot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: COLORS.border,
+  },
+  dotActive: {
+    backgroundColor: COLORS.blue,
+  },
+  errorRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: space[3],
   },
   error: {
     fontSize: 13,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.red,
-    textAlign: 'center',
-    marginBottom: 12,
   },
   button: {
     backgroundColor: COLORS.blue,
-    borderRadius: 12,
-    paddingVertical: 14,
+    borderRadius: radii.lg,
+    height: 52,
+    width: '100%',
     alignItems: 'center',
-    marginTop: 16,
+    justifyContent: 'center',
+    ...shadows.sm,
   },
   buttonDisabled: {
-    opacity: 0.6,
+    opacity: 0.55,
   },
   buttonText: {
     fontSize: 16,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
     color: COLORS.white,
+  },
+  hint: {
+    fontSize: 12,
+    fontFamily: font.regular,
+    color: COLORS.textLight,
+    textAlign: 'center',
+    marginTop: space[5],
   },
 });

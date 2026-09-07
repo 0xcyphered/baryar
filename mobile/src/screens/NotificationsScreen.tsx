@@ -11,15 +11,16 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme';
+import { COLORS, font, radii, shadows, space } from '../theme';
 import { listNotifications, markNotificationRead } from '../services/notificationsApi';
+import { hapticLight } from '../utils/haptics';
 import type { AppNotification } from '../types';
+import EmptyState from '../components/ui/EmptyState';
 
-// 029 contract: shipment_* rows carry shipmentId; offer_* rows have shipmentId null and link to the cargo.
 const TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; label: string }> = {
   shipment_assigned: { icon: 'car', color: COLORS.blue, label: 'سفر جدید' },
   shipment_status: { icon: 'navigate-outline', color: COLORS.blue, label: 'وضعیت سفر' },
-  offer_received: { icon: 'hand-left-outline', color: '#f59e0b', label: 'پیشنهاد جدید' },
+  offer_received: { icon: 'hand-left-outline', color: COLORS.amber, label: 'پیشنهاد جدید' },
   offer_rejected: { icon: 'close-circle-outline', color: COLORS.red, label: 'پیشنهاد رد شد' },
 };
 
@@ -59,10 +60,7 @@ export default function NotificationsScreen() {
   }, []);
 
   useEffect(() => {
-    queueMicrotask(() => {
-      setLoading(true);
-      loadData();
-    });
+    queueMicrotask(() => { setLoading(true); loadData(); });
   }, [loadData]);
 
   const onRefresh = useCallback(() => {
@@ -71,15 +69,14 @@ export default function NotificationsScreen() {
   }, [loadData]);
 
   const handlePress = async (notif: AppNotification) => {
+    hapticLight();
     if (!notif.readAt) {
       try {
         await markNotificationRead(notif.id);
         setNotifications((prev) =>
-          prev.map((n) => (n.id === notif.id ? { ...n, readAt: new Date().toISOString() } : n))
+          prev.map((n) => (n.id === notif.id ? { ...n, readAt: new Date().toISOString() } : n)),
         );
-      } catch {
-        // ignore read errors
-      }
+      } catch { /* ignore */ }
     }
     if (notif.shipmentId) {
       navigation.navigate('ShipmentDetail' as never, { shipmentId: notif.shipmentId } as never);
@@ -92,13 +89,20 @@ export default function NotificationsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 12 }]}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>اعلان‌ها</Text>
+        {notifications.some((n) => !n.readAt) ? (
+          <View style={styles.unreadBadge}>
+            <Text style={styles.unreadBadgeText}>
+              {notifications.filter((n) => !n.readAt).length}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       {error ? (
         <View style={styles.errorBox}>
+          <Ionicons name="alert-circle" size={14} color={COLORS.red} />
           <Text style={styles.errorText}>{error}</Text>
         </View>
       ) : null}
@@ -112,32 +116,44 @@ export default function NotificationsScreen() {
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
-            <View style={styles.emptyBox}>
-              <Ionicons name="notifications-off-outline" size={48} color={COLORS.gray} />
-              <Text style={styles.emptyText}>اعلانی ندارید</Text>
-            </View>
+            <EmptyState
+              icon="notifications-off-outline"
+              title="اعلانی ندارید"
+              message="اعلان‌های جدید اینجا نمایش داده می‌شوند"
+            />
           }
           renderItem={({ item }) => {
             const unread = !item.readAt;
             const meta = TYPE_META[item.type];
             return (
-              <Pressable style={[styles.card, unread && styles.cardUnread]} onPress={() => handlePress(item)}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.card,
+                  unread && styles.cardUnread,
+                  pressed && { opacity: 0.92 },
+                ]}
+                onPress={() => handlePress(item)}
+              >
                 {unread && <View style={styles.unreadDot} />}
                 {meta ? (
-                  <View style={[styles.typeIconBox, { backgroundColor: meta.color }]}>
-                    <Ionicons name={meta.icon} size={16} color={COLORS.white} />
+                  <View style={[styles.typeIconBox, { backgroundColor: `${meta.color}18` }]}>
+                    <Ionicons name={meta.icon} size={16} color={meta.color} />
                   </View>
                 ) : null}
                 <View style={styles.cardContent}>
                   <View style={styles.titleRow}>
                     <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-                    {meta ? <Text style={styles.typeBadge}>{meta.label}</Text> : null}
+                    {meta ? (
+                      <View style={[styles.typeBadge, { backgroundColor: `${meta.color}12` }]}>
+                        <Text style={[styles.typeBadgeText, { color: meta.color }]}>{meta.label}</Text>
+                      </View>
+                    ) : null}
                   </View>
                   <Text style={styles.cardBody} numberOfLines={2}>{item.body}</Text>
                   <Text style={styles.cardTime}>{formatTime(item.createdAt)}</Text>
                 </View>
                 {item.shipmentId || meta ? (
-                  <Ionicons name="chevron-back" size={18} color={COLORS.gray} />
+                  <Ionicons name="chevron-back" size={18} color={COLORS.textLight} />
                 ) : null}
               </Pressable>
             );
@@ -153,108 +169,109 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 10,
+    paddingHorizontal: space[4],
+    marginBottom: space[3],
+    gap: 8,
   },
   headerTitle: {
     fontSize: 20,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
     color: COLORS.textDark,
   },
+  unreadBadge: {
+    backgroundColor: COLORS.blue,
+    borderRadius: radii.full,
+    minWidth: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  unreadBadgeText: {
+    fontSize: 11,
+    fontFamily: font.bold,
+    color: COLORS.white,
+  },
   list: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
+    paddingHorizontal: space[4],
+    paddingBottom: space[6],
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
+    borderRadius: radii.lg,
+    padding: space[3],
+    marginBottom: space[2],
+    ...shadows.xs,
   },
   cardUnread: {
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.blue,
+    borderRightWidth: 3,
+    borderRightColor: COLORS.blue,
+    backgroundColor: COLORS.blueTint,
   },
   unreadDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: COLORS.blue,
-    marginRight: 10,
-  },
-  cardContent: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_700Bold',
-    color: COLORS.textDark,
-    marginBottom: 2,
-  },
-  cardBody: {
-    fontSize: 12,
-    fontFamily: 'Vazirmatn_400Regular',
-    color: COLORS.textMid,
-    marginBottom: 4,
-    lineHeight: 18,
-  },
-  cardTime: {
-    fontSize: 11,
-    fontFamily: 'Vazirmatn_400Regular',
-    color: COLORS.gray,
+    marginRight: space[2],
   },
   typeIconBox: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: space[3],
   },
+  cardContent: { flex: 1 },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginBottom: 3,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontFamily: font.bold,
+    color: COLORS.textDark,
+    flex: 1,
   },
   typeBadge: {
-    fontSize: 10,
-    fontFamily: 'Vazirmatn_700Bold',
-    color: COLORS.gray,
-    backgroundColor: COLORS.grayLight,
     paddingHorizontal: 6,
-    paddingVertical: 1,
+    paddingVertical: 2,
     borderRadius: 6,
-    overflow: 'hidden',
   },
-  emptyBox: {
-    alignItems: 'center',
-    marginTop: 60,
+  typeBadgeText: {
+    fontSize: 10,
+    fontFamily: font.bold,
   },
-  emptyText: {
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
-    color: COLORS.gray,
-    marginTop: 12,
+  cardBody: {
+    fontSize: 12,
+    fontFamily: font.regular,
+    color: COLORS.textMid,
+    lineHeight: 18,
+    marginBottom: 3,
+  },
+  cardTime: {
+    fontSize: 11,
+    fontFamily: font.regular,
+    color: COLORS.textLight,
   },
   errorBox: {
-    marginHorizontal: 16,
-    marginBottom: 8,
-    backgroundColor: '#fef2f2',
-    borderRadius: 8,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: space[4],
+    marginBottom: space[2],
+    backgroundColor: COLORS.redTint,
+    borderRadius: radii.md,
     padding: 10,
   },
   errorText: {
     color: COLORS.red,
     fontSize: 13,
-    fontFamily: 'Vazirmatn_400Regular',
-    textAlign: 'center',
+    fontFamily: font.regular,
   },
 });

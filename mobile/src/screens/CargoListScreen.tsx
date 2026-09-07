@@ -11,18 +11,21 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme';
+import { COLORS, font, radii, shadows, space } from '../theme';
 import { listCargo } from '../services/cargoApi';
+import { hapticLight } from '../utils/haptics';
 import type { Cargo } from '../types';
 import { CARGO_STATUS_COLORS, CARGO_STATUS_LABELS, MODE_LABELS, formatCoord } from '../utils/constants';
+import StatusPill from '../components/ui/StatusPill';
+import EmptyState from '../components/ui/EmptyState';
 
 const STATUS_FILTERS = [
-  { key: undefined, label: 'همه' },
-  { key: 'draft', label: 'پیش‌نویس' },
-  { key: 'open', label: 'باز' },
-  { key: 'matched', label: 'تطبیق‌یافته' },
-  { key: 'cancelled', label: 'لغو‌شده' },
-  { key: 'completed', label: 'تکمیل‌شده' },
+  { key: undefined, label: 'همه', icon: null },
+  { key: 'draft', label: 'پیش‌نویس', icon: 'document-text-outline' },
+  { key: 'open', label: 'باز', icon: 'globe-outline' },
+  { key: 'matched', label: 'تطبیق', icon: 'git-merge-outline' },
+  { key: 'cancelled', label: 'لغو', icon: 'close-circle-outline' },
+  { key: 'completed', label: 'تکمیل', icon: 'checkmark-circle-outline' },
 ] as const;
 
 export default function CargoListScreen() {
@@ -65,8 +68,8 @@ export default function CargoListScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>بارهای من</Text>
         <Pressable
-          style={styles.fab}
-          onPress={() => navigation.navigate('CreateCargo' as never)}
+          style={({ pressed }) => [styles.fab, pressed && { opacity: 0.85 }]}
+          onPress={() => { hapticLight(); navigation.navigate('CreateCargo' as never); }}
         >
           <Ionicons name="add" size={26} color={COLORS.white} />
         </Pressable>
@@ -79,26 +82,39 @@ export default function CargoListScreen() {
         keyExtractor={(item) => String(item.key ?? 'all')}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterRow}
-        renderItem={({ item }) => (
-          <Pressable
-            style={[styles.filterChip, filter === item.key && styles.filterChipActive]}
-            onPress={() => setFilter(item.key)}
-          >
-            <Text style={[styles.filterChipText, filter === item.key && styles.filterChipTextActive]}>
-              {item.label}
-            </Text>
-          </Pressable>
-        )}
+        renderItem={({ item }) => {
+          const isActive = filter === item.key;
+          return (
+            <Pressable
+              style={({ pressed }) => [
+                styles.filterChip,
+                isActive && styles.filterChipActive,
+                pressed && { opacity: 0.85 },
+              ]}
+              onPress={() => { hapticLight(); setFilter(item.key); }}
+            >
+              {item.icon ? (
+                <Ionicons
+                  name={item.icon as any}
+                  size={13}
+                  color={isActive ? COLORS.white : COLORS.textMid}
+                />
+              ) : null}
+              <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        }}
       />
 
-      {/* Error */}
       {error ? (
         <View style={styles.errorBox}>
+          <Ionicons name="alert-circle" size={14} color={COLORS.red} />
           <Text style={styles.errorText}>{error}</Text>
         </View>
       ) : null}
 
-      {/* Loading */}
       {loading && !refreshing ? (
         <ActivityIndicator size="large" color={COLORS.blue} style={{ marginTop: 40 }} />
       ) : (
@@ -108,33 +124,50 @@ export default function CargoListScreen() {
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
-            <View style={styles.emptyBox}>
-              <Ionicons name="cube-outline" size={48} color={COLORS.gray} />
-              <Text style={styles.emptyText}>هنوز باری ثبت نکرده‌اید</Text>
-              <Pressable
-                style={styles.emptyButton}
-                onPress={() => navigation.navigate('CreateCargo' as never)}
-              >
-                <Text style={styles.emptyButtonText}>ایجاد بار</Text>
-              </Pressable>
-            </View>
+            <EmptyState
+              icon="cube-outline"
+              title="هنوز باری ثبت نکرده‌اید"
+              message="اولین بار خود را ثبت کنید تا رانندگان پیشنهاد بدهند"
+              actionLabel="ایجاد بار"
+              onAction={() => navigation.navigate('CreateCargo' as never)}
+            />
           }
           renderItem={({ item }) => (
             <Pressable
-              style={styles.card}
-              onPress={() => navigation.navigate('CargoDetail' as never, { cargoId: item.id })}
+              style={({ pressed }) => [
+                styles.card,
+                pressed && { opacity: 0.96, transform: [{ scale: 0.99 }] },
+              ]}
+              onPress={() => {
+                hapticLight();
+                navigation.navigate('CargoDetail' as never, { cargoId: item.id });
+              }}
             >
               <View style={styles.cardTop}>
-                <Text style={styles.cardTitle}>{item.title || 'بدون عنوان'}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: CARGO_STATUS_COLORS[item.status] || '#9ca3af' }]}>
-                  <Text style={styles.statusBadgeText}>{CARGO_STATUS_LABELS[item.status] || item.status}</Text>
-                </View>
+                <Text style={styles.cardTitle} numberOfLines={1}>
+                  {item.title || 'بدون عنوان'}
+                </Text>
+                <StatusPill
+                  label={CARGO_STATUS_LABELS[item.status] || item.status}
+                  color={CARGO_STATUS_COLORS[item.status] || '#9ca3af'}
+                />
               </View>
-              <Text style={styles.cardRoute}>
-                {formatCoord(item.origin)} → {formatCoord(item.destination)}
-              </Text>
+              <View style={styles.cardRoute}>
+                <Ionicons name="location-outline" size={13} color={COLORS.blue} />
+                <Text style={styles.routeText} numberOfLines={1}>
+                  {formatCoord(item.origin)}
+                </Text>
+                <Ionicons name="arrow-back" size={12} color={COLORS.gray} />
+                <Text style={styles.routeText} numberOfLines={1}>
+                  {formatCoord(item.destination)}
+                </Text>
+                <Ionicons name="flag-outline" size={13} color={COLORS.red} />
+              </View>
               <View style={styles.cardMeta}>
-                <Text style={styles.metaText}>{MODE_LABELS[item.transportMode] || item.transportMode}</Text>
+                <View style={styles.metaTag}>
+                  <Ionicons name="car-outline" size={12} color={COLORS.textLight} />
+                  <Text style={styles.metaText}>{MODE_LABELS[item.transportMode] || item.transportMode}</Text>
+                </View>
                 <Text style={styles.metaText}>{new Date(item.createdAt).toLocaleDateString('fa-IR')}</Text>
               </View>
             </Pressable>
@@ -151,34 +184,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 8,
+    paddingHorizontal: space[4],
+    marginBottom: space[2],
   },
   headerTitle: {
     fontSize: 20,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
     color: COLORS.textDark,
   },
   fab: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: COLORS.blue,
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadows.sm,
   },
   filterRow: {
-    paddingHorizontal: 16,
-    paddingBottom: 10,
+    paddingHorizontal: space[4],
+    paddingBottom: space[3],
     gap: 8,
   },
   filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingVertical: 6,
     paddingHorizontal: 14,
-    borderRadius: 16,
+    borderRadius: 20,
     backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.gray,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
   },
   filterChipActive: {
     backgroundColor: COLORS.blue,
@@ -186,98 +223,79 @@ const styles = StyleSheet.create({
   },
   filterChipText: {
     fontSize: 12,
-    fontFamily: 'Vazirmatn_500Medium',
+    fontFamily: font.medium,
     color: COLORS.textMid,
   },
   filterChipTextActive: {
     color: COLORS.white,
   },
   list: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
+    paddingHorizontal: space[4],
+    paddingBottom: space[6],
   },
   card: {
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
+    borderRadius: radii.lg,
+    padding: space[4],
+    marginBottom: space[3],
+    ...shadows.sm,
   },
   cardTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: space[2],
   },
   cardTitle: {
     fontSize: 15,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
     color: COLORS.textDark,
     flex: 1,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 10,
-    marginLeft: 8,
-  },
-  statusBadgeText: {
-    color: '#fff',
-    fontSize: 11,
-    fontFamily: 'Vazirmatn_500Medium',
+    marginRight: space[2],
   },
   cardRoute: {
-    fontSize: 13,
-    fontFamily: 'Vazirmatn_400Regular',
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: space[3],
+  },
+  routeText: {
+    fontSize: 12,
+    fontFamily: font.regular,
     color: COLORS.textMid,
-    marginBottom: 6,
+    maxWidth: 100,
   },
   cardMeta: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+    paddingTop: space[2],
+  },
+  metaTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   metaText: {
     fontSize: 11,
-    fontFamily: 'Vazirmatn_400Regular',
-    color: COLORS.gray,
-  },
-  emptyBox: {
-    alignItems: 'center',
-    marginTop: 60,
-  },
-  emptyText: {
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
-    color: COLORS.gray,
-    marginTop: 12,
-    marginBottom: 16,
-  },
-  emptyButton: {
-    backgroundColor: COLORS.blue,
-    borderRadius: 10,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-  },
-  emptyButtonText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.regular,
+    color: COLORS.textLight,
   },
   errorBox: {
-    marginHorizontal: 16,
-    marginBottom: 8,
-    backgroundColor: '#fef2f2',
-    borderRadius: 8,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: space[4],
+    marginBottom: space[2],
+    backgroundColor: COLORS.redTint,
+    borderRadius: radii.md,
     padding: 10,
   },
   errorText: {
     color: COLORS.red,
     fontSize: 13,
-    fontFamily: 'Vazirmatn_400Regular',
-    textAlign: 'center',
+    fontFamily: font.regular,
   },
 });
