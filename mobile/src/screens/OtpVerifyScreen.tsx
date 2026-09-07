@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -11,27 +11,69 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, font, radii, shadows, space } from '../theme';
-import { hapticLight } from '../utils/haptics';
+import {
+  hapticLight,
+  hapticMedium,
+  hapticSuccess,
+} from '../utils/haptics';
 
 interface Props {
   phone: string;
   onBack: () => void;
 }
 
+const AUTO_SUBMIT_DELAY = 300; // ms — brief pause so user sees dots fill
+const RESEND_SECONDS = 60;
+
+/** Convert number to Persian digits for the countdown display. */
+function toPersianDigits(n: number): string {
+  return n.toString().replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]);
+}
+
 export default function OtpVerifyScreen({ phone, onBack }: Props) {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const insets = useSafeAreaInsets();
-  const { verifyOtp } = useAuth();
+  const [secondsLeft, setSecondsLeft] = useState(RESEND_SECONDS);
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
 
-  const handleVerify = async () => {
+  const insets = useSafeAreaInsets();
+  const { verifyOtp, signIn } = useAuth();
+
+  const autoSubmitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resendInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Resend countdown ────────────────────────────────────────────
+  useEffect(() => {
+    resendInterval.current = setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          if (resendInterval.current) clearInterval(resendInterval.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => {
+      if (resendInterval.current) clearInterval(resendInterval.current);
+    };
+  }, []);
+
+  // Cleanup auto-submit timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSubmitTimer.current) clearTimeout(autoSubmitTimer.current);
+    };
+  }, []);
+
+  // ── Verify handler ──────────────────────────────────────────────
+  const handleVerify = useCallback(async () => {
     const trimmed = code.trim();
     if (!trimmed || trimmed.length < 4) {
       setError('کد تأیید را وارد کنید');
       return;
     }
-    hapticLight();
     setError(null);
     setLoading(true);
     try {
@@ -45,17 +87,88 @@ export default function OtpVerifyScreen({ phone, onBack }: Props) {
       else if (msg === 'otp_locked') setError('تعداد تلاش‌ها بیش از حد مجاز است');
       else if (msg === 'account_blocked') setError('حساب شما مسدود شده است');
       else setError('خطا در تأیید کد');
+      // On error, clear the code so user can re-enter
+      setCode('');
     } finally {
       setLoading(false);
     }
-  };
+  }, [code, phone, verifyOtp]);
+
+  // ── Resend handler ──────────────────────────────────────────────
+  const handleResend = useCallback(async () => {
+    if (secondsLeft > 0 || resending) return;
+    hapticMedium();
+    setResendMessage(null);
+    setResending(true);
+    try {
+      await signIn(phone);
+      setSecondsLeft(RESEND_SECONDS);
+      setResendMessage('کد جدید ارسال شد');
+      hapticSuccess();
+      // Clear message after 3 seconds
+      setTimeout(() => setResendMessage(null), 3000);
+      // Restart the countdown interval
+      if (resendInterval.current) clearInterval(resendInterval.current);
+      resendInterval.current = setInterval(() => {
+        setSecondsLeft((prev) => {
+          if (prev <= 1) {
+            if (resendInterval.current) clearInterval(resendInterval.current);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch {
+      setError('خطا در ارسال مجدد کد');
+    } finally {
+      setResending(false);
+    }
+  }, [secondsLeft, resending, phone, signIn]);
+
+  // ── Text change with auto-submit ────────────────────────────────
+  const handleCodeChange = useCallback(
+    (text: string) => {
+      setCode(text);
+      if (error) setError(null);
+      if (resendMessage) setResendMessage(null);
+
+      // Cancel any pending auto-submit
+      if (autoSubmitTimer.current) {
+        clearTimeout(autoSubmitTimer.current);
+        autoSubmitTimer.current = null;
+      }
+
+      // Auto-submit when exactly 6 digits
+      if (text.length === 6) {
+        hapticSuccess();
+        autoSubmitTimer.current = setTimeout(() => {
+          // Read the latest code from the closure — safe because handleVerify
+          // reads from state which will be updated by the time this fires.
+          handleVerify();
+          autoSubmitTimer.current = null;
+        }, AUTO_SUBMIT_DELAY);
+      }
+    },
+    [error, resendMessage, handleVerify],
+  );
+
+  // ── Back button handler ─────────────────────────────────────────
+  const handleBack = useCallback(() => {
+    hapticLight();
+    onBack();
+  }, [onBack]);
 
   const maskedPhone = phone.replace(/(\d{2})\d+(\d{2})/, '$1****$2');
+  const isVerifying = loading;
+  const canResend = secondsLeft === 0 && !resending;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Back button */}
-      <Pressable style={[styles.backBtn, { marginTop: insets.top + space[3] }]} onPress={onBack}>
+      <Pressable
+        style={[styles.backBtn, { marginTop: insets.top + space[3] }]}
+        onPress={handleBack}
+      >
         <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} />
       </Pressable>
 
@@ -71,15 +184,12 @@ export default function OtpVerifyScreen({ phone, onBack }: Props) {
         <Text style={styles.phoneText}>{maskedPhone}</Text>
       </View>
 
-      {/* Code input */}
+      {/* Code input card */}
       <View style={styles.card}>
         <TextInput
           style={styles.codeInput}
           value={code}
-          onChangeText={(t) => {
-            setCode(t);
-            if (error) setError(null);
-          }}
+          onChangeText={handleCodeChange}
           placeholder="·  ·  ·  ·  ·  ·"
           placeholderTextColor={COLORS.gray}
           keyboardType="number-pad"
@@ -100,6 +210,14 @@ export default function OtpVerifyScreen({ phone, onBack }: Props) {
           ))}
         </View>
 
+        {/* Auto-submit indicator */}
+        {isVerifying && (
+          <View style={styles.verifyingRow}>
+            <ActivityIndicator size="small" color={COLORS.blue} />
+            <Text style={styles.verifyingText}>در حال تأیید...</Text>
+          </View>
+        )}
+
         {error ? (
           <View style={styles.errorRow}>
             <Ionicons name="alert-circle" size={14} color={COLORS.red} />
@@ -107,14 +225,23 @@ export default function OtpVerifyScreen({ phone, onBack }: Props) {
           </View>
         ) : null}
 
+        {/* Verify button (manual fallback) */}
         <Pressable
           style={({ pressed }) => [
             styles.button,
-            loading && styles.buttonDisabled,
-            pressed && !loading && { opacity: 0.92, transform: [{ scale: 0.98 }] },
+            (loading || isVerifying) && styles.buttonDisabled,
+            pressed &&
+              !loading &&
+              !isVerifying && {
+                opacity: 0.92,
+                transform: [{ scale: 0.98 }],
+              },
           ]}
-          onPress={handleVerify}
-          disabled={loading}
+          onPress={() => {
+            hapticMedium();
+            handleVerify();
+          }}
+          disabled={loading || isVerifying}
         >
           {loading ? (
             <ActivityIndicator color={COLORS.white} size="small" />
@@ -123,9 +250,48 @@ export default function OtpVerifyScreen({ phone, onBack }: Props) {
           )}
         </Pressable>
 
-        <Text style={styles.hint}>
-          کدی دریافت نکردید؟ بعد از ۶۰ ثانیه امتحان کنید
-        </Text>
+        {/* Resend section */}
+        <View style={styles.resendSection}>
+          {resendMessage ? (
+            <View style={styles.resendSuccessRow}>
+              <Ionicons
+                name="checkmark-circle"
+                size={14}
+                color={COLORS.green}
+              />
+              <Text style={styles.resendSuccessText}>{resendMessage}</Text>
+            </View>
+          ) : null}
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.resendButton,
+              !canResend && styles.resendButtonDisabled,
+              pressed &&
+                canResend && {
+                  opacity: 0.7,
+                  transform: [{ scale: 0.98 }],
+                },
+            ]}
+            onPress={handleResend}
+            disabled={!canResend}
+          >
+            {resending ? (
+              <ActivityIndicator size="small" color={COLORS.blue} />
+            ) : (
+              <Text
+                style={[
+                  styles.resendText,
+                  !canResend && styles.resendTextDisabled,
+                ]}
+              >
+                {secondsLeft > 0
+                  ? `ارسال مجدد (${toPersianDigits(secondsLeft)})`
+                  : 'ارسال مجدد'}
+              </Text>
+            )}
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -213,6 +379,17 @@ const styles = StyleSheet.create({
   dotActive: {
     backgroundColor: COLORS.blue,
   },
+  verifyingRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: space[2],
+    marginBottom: space[3],
+  },
+  verifyingText: {
+    fontSize: 13,
+    fontFamily: font.regular,
+    color: COLORS.blue,
+  },
   errorRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -241,11 +418,36 @@ const styles = StyleSheet.create({
     fontFamily: font.bold,
     color: COLORS.white,
   },
-  hint: {
-    fontSize: 12,
-    fontFamily: font.regular,
-    color: COLORS.textLight,
+  resendSection: {
+    alignItems: 'center',
+    marginTop: space[6],
+    width: '100%',
+  },
+  resendSuccessRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: space[2],
+  },
+  resendSuccessText: {
+    fontSize: 13,
+    fontFamily: font.medium,
+    color: COLORS.green,
+  },
+  resendButton: {
+    paddingVertical: space[2],
+    paddingHorizontal: space[4],
+  },
+  resendButtonDisabled: {
+    opacity: 0.45,
+  },
+  resendText: {
+    fontSize: 14,
+    fontFamily: font.medium,
+    color: COLORS.blue,
     textAlign: 'center',
-    marginTop: space[5],
+  },
+  resendTextDisabled: {
+    color: COLORS.gray,
   },
 });
