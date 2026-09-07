@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,7 +14,8 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme';
+import { COLORS, font, radii, shadows, space } from '../theme';
+import { hapticLight, hapticSuccess, hapticWarning } from '../utils/haptics';
 import { createOffer } from '../services/matchingApi';
 import { listVehicles } from '../services/driverApi';
 import type { Vehicle } from '../types';
@@ -45,11 +48,13 @@ export default function SubmitOfferScreen() {
 
   const handleSubmit = async () => {
     if (!selectedVehicleId) {
+      hapticWarning();
       Alert.alert('خطا', 'لطفاً وسیله نقلیه را انتخاب کنید');
       return;
     }
     const price = Number(priceRial);
     if (!price || price <= 0) {
+      hapticWarning();
       Alert.alert('خطا', 'لطفاً قیمت صحیح وارد کنید');
       return;
     }
@@ -61,10 +66,12 @@ export default function SubmitOfferScreen() {
         priceRial: price,
         note: note || undefined,
       });
+      hapticSuccess();
       Alert.alert('موفق', 'پیشنهاد شما ثبت شد', [
         { text: 'باشه', onPress: () => navigation.goBack() },
       ]);
     } catch (err: any) {
+      hapticWarning();
       Alert.alert('خطا', err?.error === 'duplicate_offer' ? 'شما قبلاً برای این بار پیشنهاد داده‌اید' : 'ثبت پیشنهاد با خطا مواجه شد');
     } finally {
       setSubmitting(false);
@@ -72,74 +79,87 @@ export default function SubmitOfferScreen() {
   };
 
   return (
-    <ScrollView
+    <KeyboardAvoidingView
       style={styles.container}
-      contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.header}>
-        <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} onPress={() => navigation.goBack()} />
-        <Text style={styles.headerTitle}>ثبت پیشنهاد</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <ScrollView
+        contentContainerStyle={{ paddingTop: insets.top + space[4], paddingBottom: insets.bottom + space[6] }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.header}>
+          <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} onPress={() => navigation.goBack()} />
+          <Text style={styles.headerTitle}>ثبت پیشنهاد</Text>
+          <View style={{ width: 24 }} />
+        </View>
 
-      {/* Cargo info */}
-      <View style={styles.cargoCard}>
-        <Text style={styles.cargoTitle} numberOfLines={2}>{cargoTitle || 'بار'}</Text>
-      </View>
+        {/* Cargo info */}
+        <View style={styles.cargoCard}>
+          <Text style={styles.cargoTitle} numberOfLines={2}>{cargoTitle || 'بار'}</Text>
+        </View>
 
-      {/* Form */}
-      <View style={styles.form}>
-        <Text style={styles.label}>وسیله نقلیه</Text>
-        {vehicles.length === 0 ? (
-          <Text style={styles.hint}>ابتدا یک وسیله نقلیه ثبت کنید</Text>
-        ) : (
-          <View style={styles.pickerRow}>
-            {vehicles.map((v) => (
-              <Pressable
-                key={v.id}
-                style={[styles.pickerItem, selectedVehicleId === v.id && styles.pickerItemActive]}
-                onPress={() => setSelectedVehicleId(v.id)}
-              >
-                <Text style={[styles.pickerText, selectedVehicleId === v.id && styles.pickerTextActive]}>
-                  {v.plate}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-
-        <Text style={styles.label}>قیمت پیشنهادی (ریال)</Text>
-        <TextInput
-          style={styles.input}
-          value={priceRial}
-          onChangeText={setPriceRial}
-          placeholder="قیمت پیشنهادی (ریال)"
-          placeholderTextColor={COLORS.gray}
-          keyboardType="numeric"
-        />
-
-        <Text style={styles.label}>یادداشت</Text>
-        <TextInput
-          style={styles.input}
-          value={note}
-          onChangeText={setNote}
-          placeholder="یادداشت (اختیاری)"
-          placeholderTextColor={COLORS.gray}
-        />
-
-        <Pressable
-          style={[styles.button, submitting && styles.buttonDisabled]}
-          onPress={handleSubmit}
-          disabled={submitting}
-        >
-          {submitting ? (
-            <ActivityIndicator size="small" color="#fff" />
+        {/* Form */}
+        <View style={styles.form}>
+          <Text style={styles.label}>وسیله نقلیه</Text>
+          {vehicles.length === 0 ? (
+            <Text style={styles.hint}>ابتدا یک وسیله نقلیه ثبت کنید</Text>
           ) : (
-            <Text style={styles.buttonText}>ارسال پیشنهاد</Text>
+            <View style={styles.pickerRow}>
+              {vehicles.map((v) => (
+                <Pressable
+                  key={v.id}
+                  style={({ pressed }) => [
+                    styles.pickerItem,
+                    selectedVehicleId === v.id && styles.pickerItemActive,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                  onPress={() => { hapticLight(); setSelectedVehicleId(v.id); }}
+                >
+                  <Text style={[styles.pickerText, selectedVehicleId === v.id && styles.pickerTextActive]}>
+                    {v.plate}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           )}
-        </Pressable>
-      </View>
-    </ScrollView>
+
+          <Text style={styles.label}>قیمت پیشنهادی (ریال)</Text>
+          <TextInput
+            style={styles.input}
+            value={priceRial}
+            onChangeText={setPriceRial}
+            placeholder="قیمت پیشنهادی (ریال)"
+            placeholderTextColor={COLORS.gray}
+            keyboardType="numeric"
+          />
+
+          <Text style={styles.label}>یادداشت</Text>
+          <TextInput
+            style={styles.input}
+            value={note}
+            onChangeText={setNote}
+            placeholder="یادداشت (اختیاری)"
+            placeholderTextColor={COLORS.gray}
+          />
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              pressed && { opacity: 0.9 },
+              submitting && styles.buttonDisabled,
+            ]}
+            onPress={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator size="small" color={COLORS.white} />
+            ) : (
+              <Text style={styles.buttonText}>ارسال پیشنهاد</Text>
+            )}
+          </Pressable>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -149,51 +169,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    paddingHorizontal: space[4],
+    marginBottom: space[4],
   },
   headerTitle: {
     fontSize: 17,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
     color: COLORS.textDark,
     flex: 1,
     textAlign: 'center',
   },
   cargoCard: {
     backgroundColor: COLORS.white,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 12,
-    padding: 14,
+    marginHorizontal: space[4],
+    marginBottom: space[4],
+    borderRadius: radii.lg,
+    padding: space[4],
+    ...shadows.sm,
   },
   cargoTitle: {
     fontSize: 15,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
     color: COLORS.textDark,
   },
   form: {
-    paddingHorizontal: 16,
+    paddingHorizontal: space[4],
   },
   label: {
     fontSize: 13,
-    fontFamily: 'Vazirmatn_500Medium',
+    fontFamily: font.medium,
     color: COLORS.textDark,
     marginBottom: 6,
-    marginTop: 8,
+    marginTop: space[2],
   },
   hint: {
     fontSize: 12,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.red,
     marginBottom: 8,
   },
   input: {
     backgroundColor: COLORS.white,
-    borderRadius: 10,
-    paddingHorizontal: 14,
+    borderRadius: radii.md,
+    paddingHorizontal: space[4],
     paddingVertical: 12,
     fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.textDark,
     borderWidth: 1,
     borderColor: COLORS.grayLight,
@@ -209,21 +230,22 @@ const styles = StyleSheet.create({
   pickerItem: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: radii.sm,
     backgroundColor: COLORS.white,
     borderWidth: 1,
     borderColor: COLORS.grayLight,
   },
-  pickerItemActive: { borderColor: COLORS.blue, backgroundColor: '#eff6ff' },
-  pickerText: { fontSize: 13, fontFamily: 'Vazirmatn_500Medium', color: COLORS.textDark },
+  pickerItemActive: { borderColor: COLORS.blue, backgroundColor: COLORS.blueTint },
+  pickerText: { fontSize: 13, fontFamily: font.medium, color: COLORS.textDark },
   pickerTextActive: { color: COLORS.blue },
   button: {
     backgroundColor: COLORS.blue,
-    borderRadius: 10,
+    borderRadius: radii.md,
     paddingVertical: 14,
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: space[4],
+    ...shadows.sm,
   },
   buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 15, fontFamily: 'Vazirmatn_700Bold' },
+  buttonText: { color: COLORS.white, fontSize: 15, fontFamily: font.bold },
 });

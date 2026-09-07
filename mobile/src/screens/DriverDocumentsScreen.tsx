@@ -15,7 +15,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import { COLORS } from '../theme';
+import { COLORS, font, radii, shadows, space } from '../theme';
+import { hapticLight, hapticWarning } from '../utils/haptics';
+import EmptyState from '../components/ui/EmptyState';
 import { listDocuments, uploadDocument, deleteDocument, listVehicles } from '../services/driverApi';
 import { getAuthToken } from '../services/apiClient';
 import { API_BASE } from '../config';
@@ -72,6 +74,7 @@ export default function DriverDocumentsScreen() {
   const onRefresh = useCallback(() => { setRefreshing(true); loadData(); }, [loadData]);
 
   const pickFile = async () => {
+    hapticLight();
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ALLOWED_MIME_TYPES,
@@ -91,6 +94,7 @@ export default function DriverDocumentsScreen() {
 
   const handleAdd = async () => {
     if (!pickedFile) {
+      hapticWarning();
       Alert.alert('خطا', 'ابتدا فایل سند را انتخاب کنید');
       return;
     }
@@ -107,6 +111,7 @@ export default function DriverDocumentsScreen() {
       setShowForm(false);
       loadData();
     } catch (err: any) {
+      hapticWarning();
       if (err && err.error === 'invalid_file_type') {
         Alert.alert('خطا', 'فرمت فایل مجاز نیست (فقط jpg، png، webp و pdf)');
       } else if (err && err.error === 'file_too_large') {
@@ -122,6 +127,7 @@ export default function DriverDocumentsScreen() {
   };
 
   const openDocument = async (doc: DriverDocument) => {
+    hapticLight();
     setViewingDoc(doc.id);
     try {
       const token = await getAuthToken();
@@ -148,6 +154,7 @@ export default function DriverDocumentsScreen() {
   };
 
   const handleDelete = (doc: DriverDocument) => {
+    hapticWarning();
     Alert.alert('حذف سند', 'آیا از حذف این سند مطمئن هستید؟', [
       { text: 'لغو', style: 'cancel' },
       {
@@ -174,7 +181,7 @@ export default function DriverDocumentsScreen() {
 
   if (loading && !refreshing) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingTop: insets.top + 16 }]}>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingTop: insets.top + space[4] }]}>
         <ActivityIndicator size="large" color={COLORS.blue} />
       </View>
     );
@@ -183,7 +190,7 @@ export default function DriverDocumentsScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }}
+      contentContainerStyle={{ paddingTop: insets.top + space[4], paddingBottom: insets.bottom + space[6] }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <View style={styles.header}>
@@ -192,7 +199,10 @@ export default function DriverDocumentsScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <Pressable style={styles.addButton} onPress={() => setShowForm(!showForm)}>
+      <Pressable
+        style={({ pressed }) => [styles.addButton, pressed && { opacity: 0.85 }]}
+        onPress={() => { hapticLight(); setShowForm(!showForm); }}
+      >
         <Ionicons name={showForm ? 'close' : 'add'} size={18} color={COLORS.blue} />
         <Text style={styles.addButtonText}>{showForm ? 'لغو' : 'افزودن سند'}</Text>
       </Pressable>
@@ -204,8 +214,12 @@ export default function DriverDocumentsScreen() {
             {KINDS.map((k) => (
               <Pressable
                 key={k}
-                style={[styles.pickerItem, formKind === k && styles.pickerItemActive]}
-                onPress={() => setFormKind(k)}
+                style={({ pressed }) => [
+                  styles.pickerItem,
+                  formKind === k && styles.pickerItemActive,
+                  pressed && { opacity: 0.8 },
+                ]}
+                onPress={() => { hapticLight(); setFormKind(k); }}
               >
                 <Text style={[styles.pickerText, formKind === k && styles.pickerTextActive]} numberOfLines={1}>
                   {KIND_LABELS[k]}
@@ -219,16 +233,24 @@ export default function DriverDocumentsScreen() {
               <Text style={styles.label}>وسیله مرتبط (اختیاری)</Text>
               <View style={styles.pickerRow}>
                 <Pressable
-                  style={[styles.pickerItem, !formVehicleId && styles.pickerItemActive]}
-                  onPress={() => setFormVehicleId('')}
+                  style={({ pressed }) => [
+                    styles.pickerItem,
+                    !formVehicleId && styles.pickerItemActive,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                  onPress={() => { hapticLight(); setFormVehicleId(''); }}
                 >
                   <Text style={[styles.pickerText, !formVehicleId && styles.pickerTextActive]}>بدون وسیله</Text>
                 </Pressable>
                 {vehicles.map((v) => (
                   <Pressable
                     key={v.id}
-                    style={[styles.pickerItem, formVehicleId === v.id && styles.pickerItemActive]}
-                    onPress={() => setFormVehicleId(v.id)}
+                    style={({ pressed }) => [
+                      styles.pickerItem,
+                      formVehicleId === v.id && styles.pickerItemActive,
+                      pressed && { opacity: 0.8 },
+                    ]}
+                    onPress={() => { hapticLight(); setFormVehicleId(v.id); }}
                   >
                     <Text style={[styles.pickerText, formVehicleId === v.id && styles.pickerTextActive]}>
                       {v.plate}
@@ -249,11 +271,15 @@ export default function DriverDocumentsScreen() {
           <Text style={styles.hintText}>حداکثر حجم: ۵ مگابایت</Text>
 
           <Pressable
-            style={[styles.button, (submitting || !pickedFile) && styles.buttonDisabled]}
+            style={({ pressed }) => [
+              styles.button,
+              pressed && { opacity: 0.9 },
+              (submitting || !pickedFile) && styles.buttonDisabled,
+            ]}
             onPress={handleAdd}
             disabled={submitting || !pickedFile}
           >
-            {submitting ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.buttonText}>ثبت سند</Text>}
+            {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : <Text style={styles.buttonText}>ثبت سند</Text>}
           </Pressable>
         </View>
       )}
@@ -261,7 +287,11 @@ export default function DriverDocumentsScreen() {
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
       {documents.length === 0 && !error ? (
-        <Text style={styles.emptyText}>هنوز سندی ثبت نشده</Text>
+        <EmptyState
+          icon="document-text-outline"
+          title="هنوز سندی ثبت نشده"
+          message="اسناد مورد نیاز خود را بارگذاری کنید"
+        />
       ) : (
         Object.entries(grouped).map(([kind, docs]) => (
           <View key={kind}>
@@ -270,7 +300,7 @@ export default function DriverDocumentsScreen() {
               <View key={doc.id} style={styles.card}>
                 <View style={{ flex: 1 }}>
                   <View style={styles.cardRow}>
-                    <View style={[styles.statusBadge, { backgroundColor: DOC_STATUS_COLORS[doc.verificationStatus] || '#9ca3af' }]}>
+                    <View style={[styles.statusBadge, { backgroundColor: DOC_STATUS_COLORS[doc.verificationStatus] || COLORS.gray }]}>
                       <Text style={styles.statusBadgeText}>{DOC_STATUS_LABELS[doc.verificationStatus] || doc.verificationStatus}</Text>
                     </View>
                     {doc.originalName ? (
@@ -308,12 +338,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    paddingHorizontal: space[4],
+    marginBottom: space[4],
   },
   headerTitle: {
     fontSize: 17,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
     color: COLORS.textDark,
     flex: 1,
     textAlign: 'center',
@@ -322,39 +352,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginHorizontal: 16,
-    marginBottom: 12,
+    marginHorizontal: space[4],
+    marginBottom: space[3],
     backgroundColor: COLORS.white,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderRadius: radii.md,
+    paddingHorizontal: space[4],
+    paddingVertical: space[3],
+    ...shadows.xs,
   },
   addButtonText: {
     fontSize: 14,
-    fontFamily: 'Vazirmatn_500Medium',
+    fontFamily: font.medium,
     color: COLORS.blue,
   },
   form: {
-    marginHorizontal: 16,
-    marginBottom: 16,
+    marginHorizontal: space[4],
+    marginBottom: space[4],
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: radii.lg,
+    padding: space[4],
+    ...shadows.sm,
   },
   label: {
     fontSize: 12,
-    fontFamily: 'Vazirmatn_500Medium',
+    fontFamily: font.medium,
     color: COLORS.textDark,
-    marginBottom: 4,
-    marginTop: 8,
+    marginBottom: space[1],
+    marginTop: space[2],
   },
   input: {
     backgroundColor: COLORS.grayLight,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderRadius: radii.sm,
+    paddingHorizontal: space[3],
     paddingVertical: 10,
     fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.textDark,
     writingDirection: 'rtl',
   },
@@ -363,19 +395,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     backgroundColor: COLORS.grayLight,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderRadius: radii.sm,
+    paddingHorizontal: space[3],
     paddingVertical: 12,
   },
   pickButtonText: {
     flex: 1,
     fontSize: 13,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.textDark,
   },
   hintText: {
     fontSize: 11,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.gray,
     marginTop: 4,
   },
@@ -383,43 +415,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 4,
+    marginBottom: space[1],
   },
   pickerItem: {
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: radii.sm,
     backgroundColor: COLORS.grayLight,
   },
   pickerItemActive: { backgroundColor: COLORS.blue },
-  pickerText: { fontSize: 11, fontFamily: 'Vazirmatn_500Medium', color: COLORS.textDark },
-  pickerTextActive: { color: '#fff' },
+  pickerText: { fontSize: 11, fontFamily: font.medium, color: COLORS.textDark },
+  pickerTextActive: { color: COLORS.white },
   button: {
     backgroundColor: COLORS.blue,
-    borderRadius: 10,
+    borderRadius: radii.md,
     paddingVertical: 12,
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: space[3],
   },
   buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 14, fontFamily: 'Vazirmatn_700Bold' },
+  buttonText: { color: COLORS.white, fontSize: 14, fontFamily: font.bold },
   sectionTitle: {
     fontSize: 14,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
     color: COLORS.textDark,
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 8,
+    marginHorizontal: space[4],
+    marginTop: space[4],
+    marginBottom: space[2],
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.white,
-    marginHorizontal: 16,
-    marginBottom: 6,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    marginHorizontal: space[4],
+    marginBottom: space[2],
+    borderRadius: radii.md,
+    paddingHorizontal: space[3],
+    paddingVertical: space[3],
+    ...shadows.sm,
   },
   cardRow: {
     flexDirection: 'row',
@@ -429,21 +462,21 @@ const styles = StyleSheet.create({
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: radii.sm,
   },
   statusBadgeText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 11,
-    fontFamily: 'Vazirmatn_500Medium',
+    fontFamily: font.medium,
   },
   fileName: {
     fontSize: 13,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.textDark,
   },
   rejectionText: {
     fontSize: 11,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.red,
     marginTop: 4,
   },
@@ -452,15 +485,8 @@ const styles = StyleSheet.create({
   errorText: {
     color: COLORS.red,
     fontSize: 13,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     textAlign: 'center',
-    marginTop: 20,
-  },
-  emptyText: {
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
-    color: COLORS.gray,
-    textAlign: 'center',
-    marginTop: 40,
+    marginTop: space[5],
   },
 });

@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   Pressable,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,7 +11,9 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme';
+import { COLORS, font, radii, shadows, space } from '../theme';
+import { hapticLight } from '../utils/haptics';
+import EmptyState from '../components/ui/EmptyState';
 import { listMatchingCargo } from '../services/matchingApi';
 import { listVehicles } from '../services/driverApi';
 import type { Cargo, Vehicle } from '../types';
@@ -49,18 +51,44 @@ export default function MatchingCargoScreen() {
 
   if (loading && !refreshing) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingTop: insets.top + 16 }]}>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingTop: insets.top + space[4] }]}>
         <ActivityIndicator size="large" color={COLORS.blue} />
       </View>
     );
   }
 
-  return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+  const renderItem = ({ item }: { item: Cargo }) => (
+    <Pressable
+      style={({ pressed }) => [styles.card, pressed && { opacity: 0.92, transform: [{ scale: 0.98 }] }]}
+      onPress={() => { hapticLight(); navigation.navigate('SubmitOffer', { cargoId: item.id, cargoTitle: item.title }); }}
     >
+      <View style={styles.cardHeader}>
+        <View style={styles.modeBadge}>
+          <Text style={styles.modeBadgeText}>{MODE_LABELS[item.transportMode] || item.transportMode}</Text>
+        </View>
+        <Text style={styles.cardTitle} numberOfLines={1}>{item.title || 'بدون عنوان'}</Text>
+      </View>
+
+      <View style={styles.routeRow}>
+        <Ionicons name="location-outline" size={14} color={COLORS.green} />
+        <Text style={styles.routeText} numberOfLines={1}>
+          {item.origin.address || 'مبدأ نامشخص'}
+        </Text>
+        <Ionicons name="arrow-back" size={14} color={COLORS.gray} />
+        <Ionicons name="location-outline" size={14} color={COLORS.red} />
+        <Text style={styles.routeText} numberOfLines={1}>
+          {item.destination.address || 'مقصد نامشخص'}
+        </Text>
+      </View>
+
+      {item.dimensions.weightKg > 0 && (
+        <Text style={styles.cardDetail}>{item.dimensions.weightKg} کیلوگرم</Text>
+      )}
+    </Pressable>
+  );
+
+  const listHeader = (
+    <>
       <View style={styles.header}>
         <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle}>فهرست بار</Text>
@@ -70,18 +98,26 @@ export default function MatchingCargoScreen() {
       {/* Vehicle filter */}
       {vehicles.length > 0 && (
         <View style={styles.filterRow}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 6 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: space[4], gap: 6 }}>
             <Pressable
-              style={[styles.filterChip, !selectedVehicleId && styles.filterChipActive]}
-              onPress={() => setSelectedVehicleId(undefined)}
+              style={({ pressed }) => [
+                styles.filterChip,
+                !selectedVehicleId && styles.filterChipActive,
+                pressed && { opacity: 0.8 },
+              ]}
+              onPress={() => { hapticLight(); setSelectedVehicleId(undefined); }}
             >
               <Text style={[styles.filterText, !selectedVehicleId && styles.filterTextActive]}>همه</Text>
             </Pressable>
             {vehicles.map((v) => (
               <Pressable
                 key={v.id}
-                style={[styles.filterChip, selectedVehicleId === v.id && styles.filterChipActive]}
-                onPress={() => setSelectedVehicleId(v.id)}
+                style={({ pressed }) => [
+                  styles.filterChip,
+                  selectedVehicleId === v.id && styles.filterChipActive,
+                  pressed && { opacity: 0.8 },
+                ]}
+                onPress={() => { hapticLight(); setSelectedVehicleId(v.id); }}
               >
                 <Text style={[styles.filterText, selectedVehicleId === v.id && styles.filterTextActive]}>
                   {v.plate}
@@ -93,42 +129,29 @@ export default function MatchingCargoScreen() {
       )}
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </>
+  );
 
-      {cargo.length === 0 && !error ? (
-        <Text style={styles.emptyText}>باری برای پیشنهاد یافت نشد</Text>
-      ) : (
-        cargo.map((item) => (
-          <Pressable
-            key={item.id}
-            style={styles.card}
-            onPress={() => navigation.navigate('SubmitOffer', { cargoId: item.id, cargoTitle: item.title })}
-          >
-            <View style={styles.cardHeader}>
-              <View style={styles.modeBadge}>
-                <Text style={styles.modeBadgeText}>{MODE_LABELS[item.transportMode] || item.transportMode}</Text>
-              </View>
-              <Text style={styles.cardTitle} numberOfLines={1}>{item.title || 'بدون عنوان'}</Text>
-            </View>
-
-            <View style={styles.routeRow}>
-              <Ionicons name="location-outline" size={14} color={COLORS.green} />
-              <Text style={styles.routeText} numberOfLines={1}>
-                {item.origin.address || 'مبدأ نامشخص'}
-              </Text>
-              <Ionicons name="arrow-back" size={14} color={COLORS.gray} />
-              <Ionicons name="location-outline" size={14} color={COLORS.red} />
-              <Text style={styles.routeText} numberOfLines={1}>
-                {item.destination.address || 'مقصد نامشخص'}
-              </Text>
-            </View>
-
-            {item.dimensions.weightKg > 0 && (
-              <Text style={styles.cardDetail}>{item.dimensions.weightKg} کیلوگرم</Text>
-            )}
-          </Pressable>
-        ))
-      )}
-    </ScrollView>
+  return (
+    <FlatList
+      data={cargo}
+      keyExtractor={(item) => item.id}
+      renderItem={renderItem}
+      ListHeaderComponent={listHeader}
+      ListEmptyComponent={
+        !error ? (
+          <EmptyState
+            icon="search-outline"
+            title="باری یافت نشد"
+            message="بار جدیدی برای پیشنهاد وجود ندارد"
+          />
+        ) : null
+      }
+      contentContainerStyle={{ paddingTop: insets.top + space[4], paddingBottom: insets.bottom + space[6] }}
+      onRefresh={onRefresh}
+      refreshing={refreshing}
+      style={styles.container}
+    />
   );
 }
 
@@ -138,42 +161,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    paddingHorizontal: space[4],
+    marginBottom: space[3],
   },
   headerTitle: {
     fontSize: 17,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
     color: COLORS.textDark,
     flex: 1,
     textAlign: 'center',
   },
-  filterRow: { marginBottom: 8 },
+  filterRow: { marginBottom: space[2] },
   filterChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: radii.full,
     backgroundColor: COLORS.white,
+    ...shadows.xs,
   },
   filterChipActive: { backgroundColor: COLORS.blue },
   filterText: {
     fontSize: 12,
-    fontFamily: 'Vazirmatn_500Medium',
+    fontFamily: font.medium,
     color: COLORS.textDark,
   },
-  filterTextActive: { color: '#fff' },
+  filterTextActive: { color: COLORS.white },
   card: {
     backgroundColor: COLORS.white,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
+    marginHorizontal: space[4],
+    marginBottom: space[2],
+    borderRadius: radii.lg,
+    paddingHorizontal: space[4],
+    paddingVertical: space[3],
+    ...shadows.sm,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -183,15 +203,15 @@ const styles = StyleSheet.create({
   },
   modeBadge: {
     backgroundColor: COLORS.blue,
-    borderRadius: 6,
+    borderRadius: radii.sm,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  modeBadgeText: { color: '#fff', fontSize: 11, fontFamily: 'Vazirmatn_500Medium' },
+  modeBadgeText: { color: COLORS.white, fontSize: 11, fontFamily: font.medium },
   cardTitle: {
     flex: 1,
     fontSize: 14,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
     color: COLORS.textDark,
   },
   routeRow: {
@@ -203,27 +223,20 @@ const styles = StyleSheet.create({
   routeText: {
     flex: 1,
     fontSize: 12,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.textMid,
   },
   cardDetail: {
     fontSize: 12,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.textMid,
     marginTop: 4,
   },
   errorText: {
     color: COLORS.red,
     fontSize: 13,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     textAlign: 'center',
-    marginTop: 20,
-  },
-  emptyText: {
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
-    color: COLORS.gray,
-    textAlign: 'center',
-    marginTop: 40,
+    marginTop: space[5],
   },
 });

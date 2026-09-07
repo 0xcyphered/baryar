@@ -2,9 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Pressable,
-  RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,7 +12,9 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme';
+import { COLORS, font, radii, shadows, space } from '../theme';
+import { hapticLight, hapticMedium } from '../utils/haptics';
+import EmptyState from '../components/ui/EmptyState';
 import { listVehicles, createVehicle, deleteVehicle } from '../services/driverApi';
 import type { Vehicle } from '../types';
 
@@ -89,6 +90,7 @@ export default function DriverVehiclesScreen() {
   };
 
   const handleDelete = (vehicle: Vehicle) => {
+    hapticMedium();
     Alert.alert('حذف وسیله', `آیا از حذف وسیله ${vehicle.plate} مطمئن هستید؟`, [
       { text: 'لغو', style: 'cancel' },
       {
@@ -108,25 +110,46 @@ export default function DriverVehiclesScreen() {
 
   if (loading && !refreshing) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingTop: insets.top + 16 }]}>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingTop: insets.top + space[4] }]}>
         <ActivityIndicator size="large" color={COLORS.blue} />
       </View>
     );
   }
 
-  return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
+  const renderItem = ({ item }: { item: Vehicle }) => (
+    <View style={styles.card}>
+      <View style={{ flex: 1 }}>
+        <View style={styles.cardRow}>
+          <View style={styles.typeBadge}>
+            <Text style={styles.typeBadgeText}>{VEHICLE_TYPE_LABELS[item.vehicleType] || item.vehicleType}</Text>
+          </View>
+          <Text style={styles.plate}>{item.plate}</Text>
+        </View>
+        <Text style={styles.cardDetail}>
+          {item.capacityWeightKg ? `${item.capacityWeightKg} کیلوگرم` : ''}
+          {item.capacityWeightKg && item.capacityVolumeM3 ? ' · ' : ''}
+          {item.capacityVolumeM3 ? `${item.capacityVolumeM3} مترمکعب` : ''}
+          {item.year ? ` · ${item.year}` : ''}
+        </Text>
+      </View>
+      <Pressable onPress={() => handleDelete(item)} style={styles.deleteBtn}>
+        <Ionicons name="trash-outline" size={18} color={COLORS.red} />
+      </Pressable>
+    </View>
+  );
+
+  const listHeader = (
+    <>
       <View style={styles.header}>
         <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle}>وسایل نقلیه</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      <Pressable style={styles.addButton} onPress={() => setShowForm(!showForm)}>
+      <Pressable
+        style={({ pressed }) => [styles.addButton, pressed && { opacity: 0.85 }]}
+        onPress={() => { hapticLight(); setShowForm(!showForm); }}
+      >
         <Ionicons name={showForm ? 'close' : 'add'} size={18} color={COLORS.blue} />
         <Text style={styles.addButtonText}>{showForm ? 'لغو' : 'افزودن وسیله'}</Text>
       </Pressable>
@@ -138,8 +161,12 @@ export default function DriverVehiclesScreen() {
             {VEHICLE_TYPES.map((t) => (
               <Pressable
                 key={t}
-                style={[styles.pickerItem, formType === t && styles.pickerItemActive]}
-                onPress={() => setFormType(t)}
+                style={({ pressed }) => [
+                  styles.pickerItem,
+                  formType === t && styles.pickerItemActive,
+                  pressed && { opacity: 0.8 },
+                ]}
+                onPress={() => { hapticLight(); setFormType(t); }}
               >
                 <Text style={[styles.pickerText, formType === t && styles.pickerTextActive]}>
                   {VEHICLE_TYPE_LABELS[t]}
@@ -188,43 +215,43 @@ export default function DriverVehiclesScreen() {
           />
 
           <Pressable
-            style={[styles.button, submitting && styles.buttonDisabled]}
+            style={({ pressed }) => [
+              styles.button,
+              pressed && { opacity: 0.9 },
+              submitting && styles.buttonDisabled,
+            ]}
             onPress={handleAdd}
             disabled={submitting}
           >
-            {submitting ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.buttonText}>ثبت وسیله</Text>}
+            {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : <Text style={styles.buttonText}>ثبت وسیله</Text>}
           </Pressable>
         </View>
       )}
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </>
+  );
 
-      {vehicles.length === 0 && !error ? (
-        <Text style={styles.emptyText}>هنوز وسیله‌ای ثبت نشده</Text>
-      ) : (
-        vehicles.map((v) => (
-          <View key={v.id} style={styles.card}>
-            <View style={{ flex: 1 }}>
-              <View style={styles.cardRow}>
-                <View style={styles.typeBadge}>
-                  <Text style={styles.typeBadgeText}>{VEHICLE_TYPE_LABELS[v.vehicleType] || v.vehicleType}</Text>
-                </View>
-                <Text style={styles.plate}>{v.plate}</Text>
-              </View>
-              <Text style={styles.cardDetail}>
-                {v.capacityWeightKg ? `${v.capacityWeightKg} کیلوگرم` : ''}
-                {v.capacityWeightKg && v.capacityVolumeM3 ? ' · ' : ''}
-                {v.capacityVolumeM3 ? `${v.capacityVolumeM3} مترمکعب` : ''}
-                {v.year ? ` · ${v.year}` : ''}
-              </Text>
-            </View>
-            <Pressable onPress={() => handleDelete(v)} style={styles.deleteBtn}>
-              <Ionicons name="trash-outline" size={18} color={COLORS.red} />
-            </Pressable>
-          </View>
-        ))
-      )}
-    </ScrollView>
+  return (
+    <FlatList
+      data={vehicles}
+      keyExtractor={(item) => item.id}
+      renderItem={renderItem}
+      ListHeaderComponent={listHeader}
+      ListEmptyComponent={
+        !error ? (
+          <EmptyState
+            icon="car-outline"
+            title="هنوز وسیله‌ای ثبت نشده"
+            message="وسیله نقلیه خود را ثبت کنید"
+          />
+        ) : null
+      }
+      contentContainerStyle={{ paddingTop: insets.top + space[4], paddingBottom: insets.bottom + space[6] }}
+      onRefresh={onRefresh}
+      refreshing={refreshing}
+      style={styles.container}
+    />
   );
 }
 
@@ -234,12 +261,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    paddingHorizontal: space[4],
+    marginBottom: space[4],
   },
   headerTitle: {
     fontSize: 17,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
     color: COLORS.textDark,
     flex: 1,
     textAlign: 'center',
@@ -248,39 +275,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginHorizontal: 16,
-    marginBottom: 12,
+    marginHorizontal: space[4],
+    marginBottom: space[3],
     backgroundColor: COLORS.white,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderRadius: radii.md,
+    paddingHorizontal: space[4],
+    paddingVertical: space[3],
+    ...shadows.xs,
   },
   addButtonText: {
     fontSize: 14,
-    fontFamily: 'Vazirmatn_500Medium',
+    fontFamily: font.medium,
     color: COLORS.blue,
   },
   form: {
-    marginHorizontal: 16,
-    marginBottom: 16,
+    marginHorizontal: space[4],
+    marginBottom: space[4],
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: radii.lg,
+    padding: space[4],
+    ...shadows.sm,
   },
   label: {
     fontSize: 12,
-    fontFamily: 'Vazirmatn_500Medium',
+    fontFamily: font.medium,
     color: COLORS.textDark,
-    marginBottom: 4,
-    marginTop: 8,
+    marginBottom: space[1],
+    marginTop: space[2],
   },
   input: {
     backgroundColor: COLORS.grayLight,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderRadius: radii.sm,
+    paddingHorizontal: space[3],
     paddingVertical: 10,
     fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.textDark,
     writingDirection: 'rtl',
   },
@@ -288,12 +317,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 4,
+    marginBottom: space[1],
   },
   pickerItem: {
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: radii.sm,
     backgroundColor: COLORS.grayLight,
   },
   pickerItemActive: {
@@ -301,66 +330,55 @@ const styles = StyleSheet.create({
   },
   pickerText: {
     fontSize: 12,
-    fontFamily: 'Vazirmatn_500Medium',
+    fontFamily: font.medium,
     color: COLORS.textDark,
   },
-  pickerTextActive: { color: '#fff' },
+  pickerTextActive: { color: COLORS.white },
   button: {
     backgroundColor: COLORS.blue,
-    borderRadius: 10,
+    borderRadius: radii.md,
     paddingVertical: 12,
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: space[3],
   },
   buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 14, fontFamily: 'Vazirmatn_700Bold' },
+  buttonText: { color: COLORS.white, fontSize: 14, fontFamily: font.bold },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.white,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
+    marginHorizontal: space[4],
+    marginBottom: space[2],
+    borderRadius: radii.lg,
+    paddingHorizontal: space[4],
+    paddingVertical: space[3],
+    ...shadows.sm,
   },
   cardRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 4,
+    marginBottom: space[1],
   },
   typeBadge: {
     backgroundColor: COLORS.blue,
-    borderRadius: 6,
+    borderRadius: radii.sm,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  typeBadgeText: { color: '#fff', fontSize: 11, fontFamily: 'Vazirmatn_500Medium' },
-  plate: { fontSize: 14, fontFamily: 'Vazirmatn_700Bold', color: COLORS.textDark },
+  typeBadgeText: { color: COLORS.white, fontSize: 11, fontFamily: font.medium },
+  plate: { fontSize: 14, fontFamily: font.bold, color: COLORS.textDark },
   cardDetail: {
     fontSize: 12,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.textMid,
   },
   deleteBtn: { padding: 8 },
   errorText: {
     color: COLORS.red,
     fontSize: 13,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     textAlign: 'center',
-    marginTop: 20,
-  },
-  emptyText: {
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
-    color: COLORS.gray,
-    textAlign: 'center',
-    marginTop: 40,
+    marginTop: space[5],
   },
 });
