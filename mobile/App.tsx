@@ -235,8 +235,11 @@ function DriverStackScreen() {
     <S.Navigator screenOptions={{ headerShown: false }}>
       {!isDriver ? (
         <S.Screen name="DriverOnboarding">
-          {() => (
-            <DriverOnboardingScreen onDone={() => setIsDriver(true)} />
+          {({ navigation }) => (
+            <DriverOnboardingScreen
+              onBack={() => navigation.getParent()?.goBack()}
+              onDone={() => setIsDriver(true)}
+            />
           )}
         </S.Screen>
       ) : (
@@ -247,8 +250,9 @@ function DriverStackScreen() {
             )}
           </S.Screen>
           <S.Screen name="DriverOnboarding">
-            {() => (
+            {({ navigation }) => (
               <DriverOnboardingScreen
+                onBack={() => navigation.goBack()}
                 onDone={() => setIsDriver(true)}
               />
             )}

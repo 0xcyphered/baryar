@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -10,125 +13,365 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme';
-import { upsertDriverProfile } from '../services/driverApi';
+import { COLORS, font, radii, shadows, space, textStyles } from '../theme';
+import { hapticLight, hapticMedium, hapticSuccess, hapticWarning } from '../utils/haptics';
+import { upsertDriverProfile, getDriverProfile } from '../services/driverApi';
 
 interface Props {
-  initialLicense?: string;
-  initialProfessionalCard?: string;
+  onBack: () => void;
   onDone: () => void;
 }
 
-export default function DriverOnboardingScreen({ initialLicense, initialProfessionalCard, onDone }: Props) {
-  const insets = useSafeAreaInsets();
-  const [licenseNumber, setLicenseNumber] = useState(initialLicense || '');
-  const [professionalCardNumber, setProfessionalCardNumber] = useState(initialProfessionalCard || '');
-  const [submitting, setSubmitting] = useState(false);
+type FieldErrors = {
+  licenseNumber?: string;
+  professionalCardNumber?: string;
+};
+type TouchedFields = {
+  licenseNumber?: boolean;
+  professionalCardNumber?: boolean;
+};
 
+export default function DriverOnboardingScreen({ onBack, onDone }: Props) {
+  const insets = useSafeAreaInsets();
+  const [licenseNumber, setLicenseNumber] = useState('');
+  const [professionalCardNumber, setProfessionalCardNumber] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [touched, setTouched] = useState<TouchedFields>({});
+
+  // ─── Prefill from existing profile ─────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    getDriverProfile()
+      .then((profile) => {
+        if (!cancelled) {
+          setLicenseNumber(profile.licenseNumber || '');
+          setProfessionalCardNumber(profile.professionalCardNumber || '');
+        }
+      })
+      .catch(() => {
+        /* new driver — no profile yet */
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ─── Validation ────────────────────────────────────────────────
+  const validate = (field: string, value: string): string | undefined => {
+    if (field === 'licenseNumber') {
+      if (!value.trim()) return 'شماره گواهینامه الزامی است';
+      if (value.trim().length < 2) return 'شماره گواهینامه معتبر نیست';
+    }
+    if (field === 'professionalCardNumber') {
+      if (!value.trim()) return 'شماره کارت حرفه‌ای الزامی است';
+      if (value.trim().length < 2) return 'شماره کارت حرفه‌ای معتبر نیست';
+    }
+    return undefined;
+  };
+
+  const handleBlur = (field: string, value: string) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    const error = validate(field, value);
+    setErrors((prev) => ({ ...prev, [field]: error }));
+  };
+
+  // ─── Submit ────────────────────────────────────────────────────
   const handleSubmit = async () => {
+    const licErr = validate('licenseNumber', licenseNumber);
+    const cardErr = validate('professionalCardNumber', professionalCardNumber);
+    setErrors({ licenseNumber: licErr, professionalCardNumber: cardErr });
+    setTouched({ licenseNumber: true, professionalCardNumber: true });
+
+    if (licErr || cardErr) {
+      hapticWarning();
+      return;
+    }
+
+    hapticMedium();
     setSubmitting(true);
     try {
-      await upsertDriverProfile({ licenseNumber, professionalCardNumber });
+      await upsertDriverProfile({
+        licenseNumber: licenseNumber.trim(),
+        professionalCardNumber: professionalCardNumber.trim(),
+      });
+      hapticSuccess();
       onDone();
     } catch (err: any) {
-      Alert.alert('خطا', err?.error === 'server_error' ? 'خطا در ارتباط با سرور' : 'ثبت‌نام با خطا مواجه شد');
+      Alert.alert(
+        'خطا',
+        err?.error === 'server_error'
+          ? 'خطا در ارتباط با سرور'
+          : 'ثبت‌نام با خطا مواجه شد',
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
+  // ─── Loading state ─────────────────────────────────────────────
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.container,
+          { paddingTop: insets.top + space[4], paddingBottom: insets.bottom + space[6] },
+        ]}
+      >
+        <View style={styles.header}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.backButton,
+              pressed && { opacity: 0.7 },
+            ]}
+            onPress={() => {
+              hapticLight();
+              onBack();
+            }}
+          >
+            <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} />
+          </Pressable>
+          <Text style={styles.headerTitle}>ثبت‌نام راننده</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.blue} />
+        </View>
+      </View>
+    );
+  }
+
+  // ─── Render ────────────────────────────────────────────────────
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }]}>
-      <View style={styles.header}>
-        <View style={{ width: 24 }} />
-        <Text style={styles.headerTitle}>ثبت‌نام راننده</Text>
-        <View style={{ width: 24 }} />
-      </View>
+    <KeyboardAvoidingView
+      style={styles.keyboardView}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <View
+        style={[
+          styles.container,
+          { paddingTop: insets.top + space[4], paddingBottom: insets.bottom + space[6] },
+        ]}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.backButton,
+              pressed && { opacity: 0.7 },
+            ]}
+            onPress={() => {
+              hapticLight();
+              onBack();
+            }}
+          >
+            <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} />
+          </Pressable>
+          <Text style={styles.headerTitle}>ثبت‌نام راننده</Text>
+          <View style={styles.headerSpacer} />
+        </View>
 
-      <View style={styles.form}>
-        <Text style={styles.label}>شماره گواهینامه</Text>
-        <TextInput
-          style={styles.input}
-          value={licenseNumber}
-          onChangeText={setLicenseNumber}
-          placeholder="شماره گواهینامه"
-          placeholderTextColor={COLORS.gray}
-        />
-
-        <Text style={styles.label}>شماره کارت حرفه‌ای</Text>
-        <TextInput
-          style={styles.input}
-          value={professionalCardNumber}
-          onChangeText={setProfessionalCardNumber}
-          placeholder="شماره کارت حرفه‌ای"
-          placeholderTextColor={COLORS.gray}
-        />
-
-        <Pressable
-          style={[styles.button, submitting && styles.buttonDisabled]}
-          onPress={handleSubmit}
-          disabled={submitting}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          {submitting ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>ثبت‌نام راننده</Text>
-          )}
-        </Pressable>
+          {/* Driver info card */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardIconCircle}>
+                <Ionicons name="person-outline" size={24} color={COLORS.blue} />
+              </View>
+              <Text style={styles.cardTitle}>اطلاعات راننده</Text>
+            </View>
+
+            {/* License Number */}
+            <Text style={styles.label}>شماره گواهینامه</Text>
+            <TextInput
+              style={[
+                styles.input,
+                touched.licenseNumber && errors.licenseNumber && styles.inputError,
+              ]}
+              value={licenseNumber}
+              onChangeText={(v) => {
+                setLicenseNumber(v);
+                if (touched.licenseNumber) {
+                  setErrors((prev) => ({
+                    ...prev,
+                    licenseNumber: validate('licenseNumber', v),
+                  }));
+                }
+              }}
+              onBlur={() => handleBlur('licenseNumber', licenseNumber)}
+              placeholder="شماره گواهینامه"
+              placeholderTextColor={COLORS.textLight}
+            />
+            {touched.licenseNumber && errors.licenseNumber ? (
+              <Text style={styles.errorText}>{errors.licenseNumber}</Text>
+            ) : null}
+
+            {/* Professional Card Number */}
+            <Text style={styles.label}>شماره کارت حرفه‌ای</Text>
+            <TextInput
+              style={[
+                styles.input,
+                touched.professionalCardNumber &&
+                  errors.professionalCardNumber &&
+                  styles.inputError,
+              ]}
+              value={professionalCardNumber}
+              onChangeText={(v) => {
+                setProfessionalCardNumber(v);
+                if (touched.professionalCardNumber) {
+                  setErrors((prev) => ({
+                    ...prev,
+                    professionalCardNumber: validate('professionalCardNumber', v),
+                  }));
+                }
+              }}
+              onBlur={() =>
+                handleBlur('professionalCardNumber', professionalCardNumber)
+              }
+              placeholder="شماره کارت حرفه‌ای"
+              placeholderTextColor={COLORS.textLight}
+            />
+            {touched.professionalCardNumber && errors.professionalCardNumber ? (
+              <Text style={styles.errorText}>{errors.professionalCardNumber}</Text>
+            ) : null}
+          </View>
+
+          {/* Submit button */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              submitting && styles.buttonDisabled,
+              pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+            ]}
+            onPress={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator size="small" color={COLORS.white} />
+            ) : (
+              <Text style={styles.buttonText}>ثبت‌نام راننده</Text>
+            )}
+          </Pressable>
+        </ScrollView>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
+  keyboardView: {
+    flex: 1,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 24,
+    paddingHorizontal: space[4],
+    marginBottom: space[6],
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.full,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.xs,
   },
   headerTitle: {
-    fontSize: 17,
-    fontFamily: 'Vazirmatn_700Bold',
-    color: COLORS.textDark,
+    ...textStyles.h2,
     flex: 1,
     textAlign: 'center',
   },
-  form: {
-    paddingHorizontal: 16,
+  headerSpacer: {
+    width: 40,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scrollContent: {
+    paddingHorizontal: space[5],
+    paddingBottom: space[8],
+  },
+  card: {
+    backgroundColor: COLORS.white,
+    borderRadius: radii.lg,
+    padding: space[5],
+    marginBottom: space[6],
+    borderRightWidth: 3,
+    borderRightColor: COLORS.blue,
+    ...shadows.sm,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[3],
+    marginBottom: space[5],
+  },
+  cardIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.md,
+    backgroundColor: COLORS.blueTint,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardTitle: {
+    ...textStyles.h3,
   },
   label: {
-    fontSize: 13,
-    fontFamily: 'Vazirmatn_500Medium',
+    ...textStyles.bodyMedium,
+    marginBottom: space[2],
     color: COLORS.textDark,
-    marginBottom: 6,
   },
   input: {
-    backgroundColor: COLORS.white,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
+    backgroundColor: COLORS.graySurface,
+    borderRadius: radii.md,
+    paddingHorizontal: space[4],
+    paddingVertical: space[3],
+    fontSize: 16,
+    fontFamily: font.regular,
     color: COLORS.textDark,
     borderWidth: 1,
-    borderColor: COLORS.grayLight,
-    marginBottom: 16,
-    writingDirection: 'rtl',
+    borderColor: COLORS.border,
+    marginBottom: space[2],
+  },
+  inputError: {
+    borderColor: COLORS.red,
+    backgroundColor: COLORS.redTint,
+  },
+  errorText: {
+    ...textStyles.caption,
+    color: COLORS.red,
+    marginBottom: space[3],
+    marginTop: -space[1],
   },
   button: {
     backgroundColor: COLORS.blue,
-    borderRadius: 10,
-    paddingVertical: 14,
+    borderRadius: radii.md,
+    paddingVertical: space[4],
     alignItems: 'center',
-    marginTop: 8,
+    minHeight: 50,
+    ...shadows.sm,
   },
-  buttonDisabled: { opacity: 0.6 },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
   buttonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontFamily: 'Vazirmatn_700Bold',
+    ...textStyles.button,
   },
 });
