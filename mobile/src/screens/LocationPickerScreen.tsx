@@ -1,25 +1,46 @@
-import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Camera,
   Map as MapLibreMap,
+  ViewAnnotation,
+  type CameraRef,
   type StyleSpecification,
 } from '@maplibre/maplibre-react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, TEHRAN } from '../theme';
+
+import { COLORS, TEHRAN, font, radii, shadows, space, textStyles } from '../theme';
+import SearchBar from '../components/SearchBar';
+import { useUserLocation } from '../hooks/useUserLocation';
+import { reverseGeocode } from '../utils/geocoding';
+import { toPersianDigits } from '../utils/persian';
+import { hapticLight, hapticMedium, hapticSuccess } from '../utils/haptics';
 
 /** Callback registry so the caller can receive the picked location. */
 type LocationCallback = (lat: number, lng: number) => void;
 const locationCallbacks = new Map<string, LocationCallback>();
 
-export function registerLocationCallback(key: string, cb: LocationCallback): () => void {
+export function registerLocationCallback(
+  key: string,
+  cb: LocationCallback,
+): () => void {
   locationCallbacks.set(key, cb);
   return () => locationCallbacks.delete(key);
 }
 
-export function triggerLocationCallback(key: string, lat: number, lng: number) {
+export function triggerLocationCallback(
+  key: string,
+  lat: number,
+  lng: number,
+) {
   locationCallbacks.get(key)?.(lat, lng);
 }
 
@@ -43,21 +64,76 @@ export default function LocationPickerScreen() {
   const params = (route.params || {}) as { mode?: 'origin' | 'destination' };
   const mode = params.mode || 'origin';
 
-  const [selected, setSelected] = useState<{ lat: number; lng: number } | null>(null);
+  const cameraRef = useRef<CameraRef | null>(null);
+  const { request: requestLocation } = useUserLocation();
+
+  const [selected, setSelected] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const [address, setAddress] = useState('');
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const geocodeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const title = mode === 'origin' ? 'انتخاب مبدأ' : 'انتخاب مقصد';
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleMapPress = (e: any) => {
-    const [lng, lat] = e.nativeEvent.lngLat;
-    setSelected({ lat, lng });
-  };
+  // Reverse geocode when selected changes (debounced 400ms)
+  useEffect(() => {
+    if (geocodeTimer.current) clearTimeout(geocodeTimer.current);
+    if (!selected) {
+      setAddress('');
+      return;
+    }
+    geocodeTimer.current = setTimeout(() => {
+      reverseGeocode(selected.lat, selected.lng)
+        .then(setAddress)
+        .catch(() => setAddress(''));
+    }, 400);
+    return () => {
+      if (geocodeTimer.current) clearTimeout(geocodeTimer.current);
+    };
+  }, [selected]);
 
-  const handleConfirm = () => {
+  const handleMapPress = useCallback(
+    (e: any) => {
+      const [lng, lat] = e.nativeEvent.lngLat;
+      setSelected({ lat, lng });
+      hapticLight();
+      cameraRef.current?.flyTo({ center: [lng, lat], zoom: 14, duration: 800 });
+    },
+    [],
+  );
+
+  const handleSearchSelect = useCallback((lat: number, lng: number) => {
+    setSelected({ lat, lng });
+    hapticLight();
+    cameraRef.current?.flyTo({ center: [lng, lat], zoom: 14, duration: 1200 });
+  }, []);
+
+  const handleGpsPress = useCallback(async () => {
+    hapticMedium();
+    setGpsLoading(true);
+    try {
+      const pos = await requestLocation();
+      setSelected({ lat: pos.lat, lng: pos.lng });
+      cameraRef.current?.flyTo({
+        center: [pos.lng, pos.lat],
+        zoom: 14,
+        duration: 1200,
+      });
+    } catch {
+      // GPS denied or unavailable — silent
+    } finally {
+      setGpsLoading(false);
+    }
+  }, [requestLocation]);
+
+  const handleConfirm = useCallback(() => {
     if (!selected) return;
+    hapticSuccess();
     triggerLocationCallback(mode, selected.lat, selected.lng);
     navigation.goBack();
-  };
+  }, [selected, mode, navigation]);
 
   return (
     <View style={styles.container}>
@@ -66,39 +142,74 @@ export default function LocationPickerScreen() {
         onPress={handleMapPress}
         style={styles.map}
       >
-        <Camera initialViewState={{ center: TEHRAN, zoom: 12 }} />
+        <Camera ref={cameraRef} initialViewState={{ center: TEHRAN, zoom: 12 }} />
+
+        {/* Visible marker via ViewAnnotation (NOT a plain View) */}
         {selected && (
-          <View
-            style={[
-              styles.marker,
-              {
-                // Use a ViewAnnotation or simpler approach
-              },
-            ]}
-          />
+          <ViewAnnotation id="picker-pin" lngLat={[selected.lng, selected.lat]}>
+            <View style={styles.markerPin}>
+              <Ionicons name="location" size={20} color={COLORS.white} />
+            </View>
+          </ViewAnnotation>
         )}
       </MapLibreMap>
 
+      {/* Search bar — floats over the map */}
+      <SearchBar onSelect={handleSearchSelect} />
+
+      {/* GPS / current-location FAB — left side (RTL "end") */}
+      <Pressable
+        style={[styles.gpsFab, { bottom: insets.bottom + 140 }]}
+        onPress={handleGpsPress}
+        disabled={gpsLoading}
+      >
+        {gpsLoading ? (
+          <ActivityIndicator size="small" color={COLORS.blue} />
+        ) : (
+          <Ionicons name="navigate" size={22} color={COLORS.blue} />
+        )}
+      </Pressable>
+
       {/* Title bar */}
       <View style={[styles.titleBar, { paddingTop: insets.top + 8 }]}>
-        <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
+        <Pressable
+          style={styles.backButton}
+          onPress={() => {
+            hapticLight();
+            navigation.goBack();
+          }}
+        >
           <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} />
         </Pressable>
         <Text style={styles.titleText}>{title}</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      {/* Bottom info + confirm button */}
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 }]}>
-        {selected ? (
+      {/* Bottom card — address + confirm */}
+      <View
+        style={[
+          styles.bottomBar,
+          { paddingBottom: insets.bottom + space[4] },
+        ]}
+      >
+        {address ? (
+          <Text style={styles.addressText} numberOfLines={2}>
+            {address}
+          </Text>
+        ) : selected ? (
           <Text style={styles.coordText}>
-            {selected.lat.toFixed(6)}, {selected.lng.toFixed(6)}
+            {toPersianDigits(selected.lat.toFixed(5))},{' '}
+            {toPersianDigits(selected.lng.toFixed(5))}
           </Text>
         ) : (
           <Text style={styles.hintText}>روی نقشه ضربه بزنید</Text>
         )}
+
         <Pressable
-          style={[styles.confirmButton, !selected && styles.confirmButtonDisabled]}
+          style={[
+            styles.confirmButton,
+            !selected && styles.confirmButtonDisabled,
+          ]}
           onPress={handleConfirm}
           disabled={!selected}
         >
@@ -110,8 +221,41 @@ export default function LocationPickerScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  map: { flex: 1 },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+  map: {
+    flex: 1,
+  },
+
+  /* Visible pin marker via ViewAnnotation */
+  markerPin: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.red,
+    borderWidth: 3,
+    borderColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.md,
+  },
+
+  /* GPS FAB */
+  gpsFab: {
+    position: 'absolute',
+    left: space[4],
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.md,
+  },
+
+  /* Title bar */
   titleBar: {
     position: 'absolute',
     top: 0,
@@ -120,70 +264,62 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingBottom: 8,
+    paddingHorizontal: space[3],
+    paddingBottom: space[2],
     backgroundColor: 'rgba(255,255,255,0.92)',
   },
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: radii.full,
     backgroundColor: COLORS.white,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    ...shadows.sm,
   },
   titleText: {
     fontSize: 16,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
     color: COLORS.textDark,
   },
-  marker: {
-    position: 'absolute',
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: COLORS.red,
-    borderWidth: 3,
-    borderColor: COLORS.white,
-  },
+
+  /* Bottom card */
   bottomBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     backgroundColor: COLORS.white,
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: space[5],
+    paddingTop: space[4],
+    borderTopRightRadius: radii.xl,
+    borderTopLeftRadius: radii.xl,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 8,
+    ...shadows.lg,
+  },
+  addressText: {
+    ...textStyles.body,
+    marginBottom: space[3],
+    textAlign: 'center',
   },
   coordText: {
     fontSize: 13,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.textMid,
-    marginBottom: 12,
+    marginBottom: space[3],
     textAlign: 'center',
   },
   hintText: {
     fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.gray,
-    marginBottom: 12,
+    marginBottom: space[3],
   },
   confirmButton: {
     backgroundColor: COLORS.blue,
-    borderRadius: 12,
+    borderRadius: radii.lg,
     paddingVertical: 12,
-    paddingHorizontal: 48,
+    paddingHorizontal: space[10],
     width: '100%',
     alignItems: 'center',
   },
@@ -191,8 +327,6 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   confirmButtonText: {
-    color: COLORS.white,
-    fontSize: 15,
-    fontFamily: 'Vazirmatn_700Bold',
+    ...textStyles.button,
   },
 });
