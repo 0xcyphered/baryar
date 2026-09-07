@@ -12,7 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
-import { createCargo } from '../services/cargoApi';
+import { createCargo, publishCargo } from '../services/cargoApi';
 import { registerLocationCallback } from './LocationPickerScreen';
 import { MODE_LABELS, SPECIAL_LABELS, CARGO_ERROR_COPY } from '../utils/constants';
 
@@ -68,7 +68,7 @@ export default function CreateCargoScreen() {
     setLoading(true);
     setError(null);
     try {
-      await createCargo({
+      const created = await createCargo({
         title: title || undefined,
         description: description || undefined,
         transportMode,
@@ -85,7 +85,27 @@ export default function CreateCargoScreen() {
         pickupAt: pickupAt || null,
         deliverBy: deliverBy || null,
       });
-      navigation.goBack();
+      Alert.alert(
+        'بار ثبت شد',
+        'آیا می‌خواهید همین حالا منتشر شود تا رانندگان بتوانند پیشنهاد بدهند؟ پیش‌نویس‌ها بعداً از حالت «صاحب کالا» قابل انتشار هستند.',
+        [
+          { text: 'بعداً', style: 'cancel', onPress: () => navigation.goBack() },
+          {
+            text: 'انتشار',
+            onPress: () => {
+              publishCargo(created.id)
+                .then(() => navigation.goBack())
+                .catch(() => {
+                  Alert.alert(
+                    'خطا',
+                    'انتشار ممکن نبود؛ بار به‌صورت پیش‌نویس ذخیره شد و از حالت «صاحب کالا» قابل انتشار است.'
+                  );
+                  navigation.goBack();
+                });
+            },
+          },
+        ]
+      );
     } catch (e: unknown) {
       const code = e && typeof e === 'object' && 'error' in e
         ? String((e as { error: string }).error)

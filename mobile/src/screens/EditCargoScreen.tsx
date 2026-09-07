@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import { getCargo, updateCargo } from '../services/cargoApi';
+import { registerLocationCallback } from './LocationPickerScreen';
 import { MODE_LABELS, SPECIAL_LABELS, CARGO_ERROR_COPY } from '../utils/constants';
 
 const TRANSPORT_MODES = ['land', 'sea', 'air', 'rail', 'multimodal'] as const;
@@ -48,6 +49,8 @@ export default function EditCargoScreen() {
   const [pickupAt, setPickupAt] = useState('');
   const [deliverBy, setDeliverBy] = useState('');
   const [cargoStatus, setCargoStatus] = useState('');
+  const [origin, setOrigin] = useState<{ lat: number; lng: number } | null>(null);
+  const [destination, setDestination] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -69,6 +72,14 @@ export default function EditCargoScreen() {
           heightCm: String(cargo.dimensions.heightCm || ''),
         });
         setSpecials(cargo.specialCharacteristics || []);
+        setOrigin({
+          lat: cargo.origin.location.coordinates[1],
+          lng: cargo.origin.location.coordinates[0],
+        });
+        setDestination({
+          lat: cargo.destination.location.coordinates[1],
+          lng: cargo.destination.location.coordinates[0],
+        });
         setPickupAt(cargo.pickupAt ? cargo.pickupAt.slice(0, 10) : '');
         setDeliverBy(cargo.deliverBy ? cargo.deliverBy.slice(0, 10) : '');
       } catch {
@@ -78,6 +89,15 @@ export default function EditCargoScreen() {
       }
     })();
   }, [cargoId]);
+
+  const pickLocation = (mode: 'origin' | 'destination') => {
+    const key = `edit_${mode}`;
+    registerLocationCallback(key, (lat, lng) => {
+      if (mode === 'origin') setOrigin({ lat, lng });
+      else setDestination({ lat, lng });
+    });
+    navigation.navigate('LocationPicker' as never, { mode } as never);
+  };
 
   const toggleSpecial = (s: string) => {
     setSpecials((prev) =>
@@ -93,6 +113,12 @@ export default function EditCargoScreen() {
         title,
         description,
         transportMode,
+        origin: origin
+          ? { address: '', location: { type: 'Point', coordinates: [origin.lng, origin.lat] } }
+          : undefined,
+        destination: destination
+          ? { address: '', location: { type: 'Point', coordinates: [destination.lng, destination.lat] } }
+          : undefined,
         dimensions: {
           weightKg: Number(dimensions.weightKg) || 0,
           volumeM3: Number(dimensions.volumeM3) || 0,
@@ -136,6 +162,30 @@ export default function EditCargoScreen() {
         <Text style={styles.headerTitle}>ویرایش بار</Text>
         <View style={{ width: 24 }} />
       </View>
+
+      {/* Origin */}
+      <Pressable style={styles.pickerRow} onPress={() => pickLocation('origin')}>
+        <Ionicons name="location-outline" size={20} color={COLORS.blue} />
+        <View style={{ flex: 1, marginLeft: 10 }}>
+          <Text style={styles.pickerLabel}>مبدأ</Text>
+          <Text style={styles.pickerValue}>
+            {origin ? `${origin.lat.toFixed(4)}, ${origin.lng.toFixed(4)}` : 'روی نقشه انتخاب کنید'}
+          </Text>
+        </View>
+        <Ionicons name="chevron-back" size={18} color={COLORS.gray} />
+      </Pressable>
+
+      {/* Destination */}
+      <Pressable style={styles.pickerRow} onPress={() => pickLocation('destination')}>
+        <Ionicons name="flag-outline" size={20} color={COLORS.red} />
+        <View style={{ flex: 1, marginLeft: 10 }}>
+          <Text style={styles.pickerLabel}>مقصد</Text>
+          <Text style={styles.pickerValue}>
+            {destination ? `${destination.lat.toFixed(4)}, ${destination.lng.toFixed(4)}` : 'روی نقشه انتخاب کنید'}
+          </Text>
+        </View>
+        <Ionicons name="chevron-back" size={18} color={COLORS.gray} />
+      </Pressable>
 
       {/* Title */}
       <Text style={styles.fieldLabel}>عنوان</Text>
@@ -273,6 +323,31 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: 'Vazirmatn_700Bold',
     color: COLORS.textDark,
+  },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    padding: 14,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  pickerLabel: {
+    fontSize: 12,
+    fontFamily: 'Vazirmatn_500Medium',
+    color: COLORS.textMid,
+  },
+  pickerValue: {
+    fontSize: 14,
+    fontFamily: 'Vazirmatn_400Regular',
+    color: COLORS.textDark,
+    marginTop: 2,
   },
   fieldLabel: {
     fontSize: 13,

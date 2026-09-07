@@ -95,6 +95,7 @@ export type ShipmentStackParamList = {
   ShipmentList: undefined;
   ShipmentDetail: { shipmentId: string };
   CreateCargo: undefined;
+  LocationPicker: { mode: 'origin' | 'destination' };
 };
 
 export type DriverStackParamList = {
@@ -158,6 +159,9 @@ function ShipmentStackScreen() {
       {/* Plan 040: user-mode keeps §1 "submitting transport requests"
           reachable from the حمل‌ونقل tab. */}
       <S.Screen name="CreateCargo" component={CreateCargoScreen} />
+      {/* Plan 041: CreateCargo lives in this stack for §1 users; the
+          location picker must be reachable from here too. */}
+      <S.Screen name="LocationPicker" component={LocationPickerScreen} />
     </S.Navigator>
   );
 }
