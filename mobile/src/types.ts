@@ -83,6 +83,8 @@ export interface Offer {
   status: 'pending' | 'accepted' | 'rejected' | 'withdrawn';
   createdAt: string;
   updatedAt: string;
+  /** 048: optional embedded driver summary if the backend enriches the payload. */
+  driver?: { id: string; name?: string; phone?: string };
 }
 
 export interface Shipment {
@@ -97,6 +99,8 @@ export interface Shipment {
   deliveredAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** 048: optional embedded cargo summary if the backend enriches the payload. */
+  cargo?: { id: string; title?: string };
 }
 
 export interface ShipmentEvent {

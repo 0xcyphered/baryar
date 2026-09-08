@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -12,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import { getShipment, listShipmentEvents } from '../services/shipmentsApi';
+import { hapticLight } from '../utils/haptics';
 import type { Shipment, ShipmentEvent } from '../types';
 import {
   SHIPMENT_STATUS_COLORS,
@@ -79,7 +81,9 @@ export default function ShipmentDetailScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
         <View style={styles.header}>
-          <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} onPress={() => navigation.goBack()} />
+          <Pressable onPress={() => { hapticLight(); navigation.goBack(); }}>
+            <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} />
+          </Pressable>
         </View>
         <Text style={styles.errorText}>{error || 'حمل‌ونقل یافت نشد'}</Text>
       </View>
@@ -90,11 +94,20 @@ export default function ShipmentDetailScreen() {
     <ScrollView
       style={styles.container}
       contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={[COLORS.blue]}
+          tintColor={COLORS.blue}
+        />
+      }
     >
       {/* Header */}
       <View style={styles.header}>
-        <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} onPress={() => navigation.goBack()} />
+        <Pressable onPress={() => { hapticLight(); navigation.goBack(); }}>
+          <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} />
+        </Pressable>
         <Text style={styles.headerTitle}>جزئیات حمل‌ونقل</Text>
         <View style={{ width: 24 }} />
       </View>

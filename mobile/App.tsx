@@ -130,7 +130,8 @@ export const ROLE_TABS: Record<AppRole, readonly (keyof MainTabParamList)[]> = {
 function MapStackScreen() {
   const S = createNativeStackNavigator();
   return (
-    <S.Navigator screenOptions={{ headerShown: false }}>
+    // 048: slide_from_right reads as "forward" in the RTL layout.
+    <S.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       <S.Screen name="Map" component={AppRoot} />
     </S.Navigator>
   );
@@ -139,7 +140,7 @@ function MapStackScreen() {
 function CargoStackScreen() {
   const S = createNativeStackNavigator<CargoStackParamList>();
   return (
-    <S.Navigator screenOptions={{ headerShown: false }}>
+    <S.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       <S.Screen name="CargoList" component={CargoListScreen} />
       <S.Screen name="CreateCargo" component={CreateCargoScreen} />
       <S.Screen name="EditCargo" component={EditCargoScreen} />
@@ -153,7 +154,7 @@ function CargoStackScreen() {
 function ShipmentStackScreen() {
   const S = createNativeStackNavigator<ShipmentStackParamList>();
   return (
-    <S.Navigator screenOptions={{ headerShown: false }}>
+    <S.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       <S.Screen name="ShipmentList" component={ShipmentListScreen} />
       <S.Screen name="ShipmentDetail" component={ShipmentDetailScreen} />
       {/* Plan 040: user-mode keeps §1 "submitting transport requests"
@@ -232,7 +233,7 @@ function DriverStackScreen() {
   }
 
   return (
-    <S.Navigator screenOptions={{ headerShown: false }}>
+    <S.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       {!isDriver ? (
         <S.Screen name="DriverOnboarding">
           {({ navigation }) => (
@@ -343,7 +344,7 @@ function AppNavigator() {
 
   if (!user) {
     return (
-      <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+      <AuthStack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
         <AuthStack.Screen name="OtpRequest">
           {({ navigation }) => (
             <OtpRequestScreen
@@ -369,7 +370,7 @@ function AppNavigator() {
   // effects.
   if (!activeRole) {
     return (
-      <RootStack.Navigator screenOptions={{ headerShown: false }}>
+      <RootStack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
         <RootStack.Screen name="RoleChoice">
           {() => <RoleChoiceScreen onDone={() => {}} />}
         </RootStack.Screen>
@@ -378,7 +379,7 @@ function AppNavigator() {
   }
 
   return (
-    <RootStack.Navigator screenOptions={{ headerShown: false }}>
+    <RootStack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       <RootStack.Screen name="MainTabs" component={MainTabs} />
       <RootStack.Screen name="Profile">
         {({ navigation }) => (

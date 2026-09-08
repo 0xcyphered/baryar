@@ -11,11 +11,14 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme';
+import { COLORS, shadows } from '../theme';
 import { listShipments } from '../services/shipmentsApi';
+import { listCargo } from '../services/cargoApi';
 import { hapticLight } from '../utils/haptics';
+import { useAuth } from '../context/AuthContext';
 import type { Shipment } from '../types';
 import { SHIPMENT_STATUS_COLORS, SHIPMENT_STATUS_LABELS } from '../utils/constants';
+import EmptyState from '../components/ui/EmptyState';
 
 const FILTERS = [
   { key: undefined, label: 'همه' },
@@ -29,11 +32,17 @@ const FILTERS = [
 export default function ShipmentListScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const { user } = useAuth();
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [filter, setFilter] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 048: own cargo titles for the list — GET /api/cargo is owner-scoped,
+  // so the join only applies to cargo_owner users; drivers fall back to
+  // the shipment's optional embedded cargo or a short id.
+  const [cargoTitles, setCargoTitles] = useState<Record<string, string>>({});
+  const isCargoOwner = !!user?.roles.includes('cargo_owner');
 
   const loadShipments = useCallback(async () => {
     try {
@@ -54,6 +63,20 @@ export default function ShipmentListScreen() {
       loadShipments();
     });
   }, [loadShipments]);
+
+  useEffect(() => {
+    if (!isCargoOwner) return;
+    let cancelled = false;
+    listCargo()
+      .then((cargo) => {
+        if (cancelled) return;
+        const titles: Record<string, string> = {};
+        for (const c of cargo) titles[c.id] = c.title;
+        setCargoTitles(titles);
+      })
+      .catch(() => { /* titles are a nicety — list still renders ids */ });
+    return () => { cancelled = true; };
+  }, [isCargoOwner]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -89,8 +112,8 @@ export default function ShipmentListScreen() {
         contentContainerStyle={styles.filterRow}
         renderItem={({ item }) => (
           <Pressable
-            style={[styles.filterChip, filter === item.key && styles.filterChipActive]}
-            onPress={() => setFilter(item.key)}
+            style={({ pressed }) => [styles.filterChip, filter === item.key && styles.filterChipActive, pressed && { opacity: 0.9 }]}
+            onPress={() => { hapticLight(); setFilter(item.key); }}
           >
             <Text style={[styles.filterChipText, filter === item.key && styles.filterChipTextActive]}>
               {item.label}
@@ -112,21 +135,34 @@ export default function ShipmentListScreen() {
           data={shipments}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[COLORS.blue]}
+              tintColor={COLORS.blue}
+            />
+          }
           ListEmptyComponent={
-            <View style={styles.emptyBox}>
-              <Ionicons name="car-outline" size={48} color={COLORS.gray} />
-              <Text style={styles.emptyText}>هنوز حمل‌ونقلی ندارید</Text>
-            </View>
+            <EmptyState
+              icon="car-outline"
+              title="هنوز حمل‌ونقلی ندارید"
+              message="با ثبت درخواست حمل، مسیر بار شما اینجا دیده می‌شود"
+            />
           }
           renderItem={({ item }) => (
             <Pressable
-              style={styles.card}
-              onPress={() => navigation.navigate('ShipmentDetail' as never, { shipmentId: item.id } as never)}
+              style={({ pressed }) => [styles.card, pressed && { opacity: 0.92 }]}
+              onPress={() => {
+                hapticLight();
+                navigation.navigate('ShipmentDetail' as never, { shipmentId: item.id } as never);
+              }}
             >
               <View style={styles.cardTop}>
-                <Text style={styles.cargoId}>بار: {item.cargoId.slice(0, 8)}...</Text>
-                <View style={[styles.statusBadge, { backgroundColor: SHIPMENT_STATUS_COLORS[item.status] || '#9ca3af' }]}>
+                <Text style={styles.cargoId} numberOfLines={1}>
+                  بار: {item.cargo?.title || cargoTitles[item.cargoId] || `#${item.cargoId.slice(0, 6)}…`}
+                </Text>
+                <View style={[styles.statusBadge, { backgroundColor: SHIPMENT_STATUS_COLORS[item.status] || COLORS.gray }]}>
                   <Text style={styles.statusBadgeText}>{SHIPMENT_STATUS_LABELS[item.status] || item.status}</Text>
                 </View>
               </View>
@@ -217,11 +253,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
+    ...shadows.sm,
   },
   cardTop: {
     flexDirection: 'row',
@@ -239,7 +271,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 10,
-    marginLeft: 8,
+    marginStart: 8,
   },
   statusBadgeText: {
     color: '#fff',
@@ -256,20 +288,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Vazirmatn_400Regular',
     color: COLORS.gray,
   },
-  emptyBox: {
-    alignItems: 'center',
-    marginTop: 60,
-  },
-  emptyText: {
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
-    color: COLORS.gray,
-    marginTop: 12,
-  },
   errorBox: {
     marginHorizontal: 16,
     marginBottom: 8,
-    backgroundColor: '#fef2f2',
+    backgroundColor: COLORS.redTint,
     borderRadius: 8,
     padding: 10,
   },

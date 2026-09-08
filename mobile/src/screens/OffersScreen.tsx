@@ -12,10 +12,12 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme';
+import { COLORS, shadows } from '../theme';
 import { listCargoOffers, acceptOffer } from '../services/offersApi';
+import { hapticLight, hapticSuccess } from '../utils/haptics';
 import type { Offer } from '../types';
 import { OFFER_STATUS_COLORS, OFFER_STATUS_LABELS } from '../utils/constants';
+import EmptyState from '../components/ui/EmptyState';
 
 type ParamList = {
   Offers: { cargoId: string; cargoTitle: string };
@@ -23,6 +25,12 @@ type ParamList = {
 
 function formatPrice(price: number): string {
   return price.toLocaleString('fa-IR');
+}
+
+/** 048: driver display name — the payload has no driver summary yet
+ *  (publicOffer sends driverUserId only), so fall back to a short id. */
+function driverDisplayName(offer: Offer): string {
+  return offer.driver?.name || offer.driver?.phone || `#${offer.driverUserId.slice(0, 6)}…`;
 }
 
 export default function OffersScreen() {
@@ -65,6 +73,7 @@ export default function OffersScreen() {
   }, [loadOffers]);
 
   const handleAccept = (offerId: string) => {
+    hapticLight();
     Alert.alert('انتخاب پیشنهاد', 'آیا می‌خواهید این پیشنهاد را بپذیرید؟', [
       { text: 'لغو', style: 'cancel' },
       {
@@ -73,6 +82,7 @@ export default function OffersScreen() {
           setAcceptingId(offerId);
           try {
             await acceptOffer(offerId);
+            hapticSuccess();
             Alert.alert('موفقیت', 'پیشنهاد پذیرفته شد');
             navigation.goBack();
           } catch {
@@ -89,7 +99,7 @@ export default function OffersScreen() {
     <View style={[styles.container, { paddingTop: insets.top + 12 }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()}>
+        <Pressable onPress={() => { hapticLight(); navigation.goBack(); }}>
           <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>پیشنهادها — {cargoTitle}</Text>
@@ -110,21 +120,29 @@ export default function OffersScreen() {
           data={offers}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[COLORS.blue]}
+              tintColor={COLORS.blue}
+            />
+          }
           ListEmptyComponent={
-            <View style={styles.emptyBox}>
-              <Ionicons name="document-text-outline" size={48} color={COLORS.gray} />
-              <Text style={styles.emptyText}>هنوز پیشنهادی دریافت نکرده‌اید</Text>
-            </View>
+            <EmptyState
+              icon="hand-left-outline"
+              title="هنوز پیشنهادی دریافت نکرده‌اید"
+              message="پس از ثبت اولین پیشنهاد راننده، اینجا نمایش داده می‌شود"
+            />
           }
           renderItem={({ item }) => (
             <View style={styles.card}>
               <View style={styles.cardTop}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.driverId}>راننده: {item.driverUserId.slice(0, 8)}...</Text>
+                  <Text style={styles.driverId}>راننده: {driverDisplayName(item)}</Text>
                   <Text style={styles.price}>{formatPrice(item.priceRial)} ریال</Text>
                 </View>
-                <View style={[styles.statusBadge, { backgroundColor: OFFER_STATUS_COLORS[item.status] || '#9ca3af' }]}>
+                <View style={[styles.statusBadge, { backgroundColor: OFFER_STATUS_COLORS[item.status] || COLORS.gray }]}>
                   <Text style={styles.statusBadgeText}>{OFFER_STATUS_LABELS[item.status] || item.status}</Text>
                 </View>
               </View>
@@ -175,11 +193,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
+    ...shadows.sm,
   },
   cardTop: {
     flexDirection: 'row',
@@ -202,7 +216,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 10,
-    marginLeft: 8,
+    marginStart: 8,
   },
   statusBadgeText: {
     color: '#fff',
@@ -231,20 +245,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Vazirmatn_700Bold',
   },
-  emptyBox: {
-    alignItems: 'center',
-    marginTop: 60,
-  },
-  emptyText: {
-    fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
-    color: COLORS.gray,
-    marginTop: 12,
-  },
   errorBox: {
     marginHorizontal: 16,
     marginBottom: 8,
-    backgroundColor: '#fef2f2',
+    backgroundColor: COLORS.redTint,
     borderRadius: 8,
     padding: 10,
   },

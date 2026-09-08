@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import { getCargo, publishCargo, cancelCargo, deleteCargo } from '../services/cargoApi';
 import { listShipments } from '../services/shipmentsApi';
+import { hapticLight, hapticSuccess, hapticWarning } from '../utils/haptics';
 import type { Cargo } from '../types';
 import { CARGO_STATUS_COLORS, CARGO_STATUS_LABELS, MODE_LABELS, SPECIAL_LABELS, formatCoord } from '../utils/constants';
 
@@ -30,6 +32,7 @@ export default function CargoDetailScreen() {
 
   const [cargo, setCargo] = useState<Cargo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
 
@@ -42,6 +45,7 @@ export default function CargoDetailScreen() {
       setError('خطا در بارگیری اطلاعات بار');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [cargoId]);
 
@@ -49,7 +53,15 @@ export default function CargoDetailScreen() {
     queueMicrotask(loadCargo);
   }, [loadCargo]);
 
+  // 048: pull-to-refresh reuses loadCargo — the screen stays visible
+  // (the loading gate only covers the first load).
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void loadCargo();
+  }, [loadCargo]);
+
   const handlePublish = () => {
+    hapticLight();
     Alert.alert('انتشار بار', 'آیا می‌خواهید این بار را منتشر کنید؟', [
       { text: 'لغو', style: 'cancel' },
       {
@@ -59,6 +71,7 @@ export default function CargoDetailScreen() {
           try {
             const updated = await publishCargo(cargoId);
             setCargo(updated);
+            hapticSuccess();
           } catch {
             Alert.alert('خطا', 'انتشار بار ممکن نبود');
           } finally {
@@ -70,6 +83,7 @@ export default function CargoDetailScreen() {
   };
 
   const handleCancel = () => {
+    hapticWarning();
     Alert.alert('لغو بار', 'آیا می‌خواهید این بار را لغو کنید؟', [
       { text: 'بازگشت', style: 'cancel' },
       {
@@ -80,6 +94,7 @@ export default function CargoDetailScreen() {
           try {
             const updated = await cancelCargo(cargoId);
             setCargo(updated);
+            hapticSuccess();
           } catch {
             Alert.alert('خطا', 'لغو بار ممکن نبود');
           } finally {
@@ -91,6 +106,7 @@ export default function CargoDetailScreen() {
   };
 
   const handleDelete = () => {
+    hapticWarning();
     Alert.alert('حذف بار', 'آیا می‌خواهید این بار را حذف کنید؟', [
       { text: 'لغو', style: 'cancel' },
       {
@@ -100,6 +116,7 @@ export default function CargoDetailScreen() {
           setActing(true);
           try {
             await deleteCargo(cargoId);
+            hapticSuccess();
             navigation.goBack();
           } catch {
             Alert.alert('خطا', 'حذف بار ممکن نبود');
@@ -149,10 +166,18 @@ export default function CargoDetailScreen() {
     <ScrollView
       style={styles.container}
       contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={[COLORS.blue]}
+          tintColor={COLORS.blue}
+        />
+      }
     >
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()}>
+        <Pressable onPress={() => { hapticLight(); navigation.goBack(); }}>
           <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>{cargo.title || 'بدون عنوان'}</Text>
@@ -205,7 +230,7 @@ export default function CargoDetailScreen() {
         <View style={styles.actions}>
           <Pressable
             style={styles.actionButton}
-            onPress={() => navigation.navigate('EditCargo' as never, { cargoId: cargo.id } as never)}
+            onPress={() => { hapticLight(); navigation.navigate('EditCargo' as never, { cargoId: cargo.id } as never); }}
           >
             <Ionicons name="pencil-outline" size={18} color={COLORS.blue} />
             <Text style={styles.actionButtonText}>ویرایش</Text>
@@ -233,7 +258,7 @@ export default function CargoDetailScreen() {
         <View style={styles.actions}>
           <Pressable
             style={styles.actionButton}
-            onPress={() => navigation.navigate('Offers' as never, { cargoId: cargo.id, cargoTitle: cargo.title } as never)}
+            onPress={() => { hapticLight(); navigation.navigate('Offers' as never, { cargoId: cargo.id, cargoTitle: cargo.title } as never); }}
           >
             <Ionicons name="list-outline" size={18} color={COLORS.blue} />
             <Text style={styles.actionButtonText}>پیشنهادها</Text>
@@ -251,7 +276,10 @@ export default function CargoDetailScreen() {
 
       {cargo.status === 'matched' && (
         <View style={styles.actions}>
-          <Pressable style={styles.actionButton} onPress={handleViewShipment}>
+          <Pressable
+            style={styles.actionButton}
+            onPress={() => { hapticLight(); void handleViewShipment(); }}
+          >
             <Ionicons name="car-outline" size={18} color={COLORS.blue} />
             <Text style={styles.actionButtonText}>مشاهده حمل‌ونقل</Text>
           </Pressable>

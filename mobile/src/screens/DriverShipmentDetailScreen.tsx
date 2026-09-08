@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import { getShipment, listShipmentEvents, transitionShipment, addShipmentEvent } from '../services/shipmentsApi';
+import { hapticLight, hapticSuccess } from '../utils/haptics';
 import type { Shipment, ShipmentEvent } from '../types';
 import {
   SHIPMENT_STATUS_LABELS,
@@ -82,6 +83,7 @@ export default function DriverShipmentDetailScreen() {
   const onRefresh = useCallback(() => { setRefreshing(true); loadData(); }, [loadData]);
 
   const handleTransition = (nextStatus: string) => {
+    hapticLight();
     Alert.alert('تغییر وضعیت', `آیا مطمئن هستید وضعیت به "${SHIPMENT_STATUS_LABELS[nextStatus]}" تغییر کند؟`, [
       { text: 'لغو', style: 'cancel' },
       {
@@ -90,6 +92,7 @@ export default function DriverShipmentDetailScreen() {
           setTransitioning(true);
           try {
             await transitionShipment(shipmentId, nextStatus);
+            hapticSuccess();
             loadData();
           } catch (err: any) {
             Alert.alert('خطا', err?.error === 'invalid_transition' ? 'تغییر وضعیت مجاز نیست' : 'خطا در تغییر وضعیت');
@@ -102,6 +105,7 @@ export default function DriverShipmentDetailScreen() {
   };
 
   const handleAddEvent = async () => {
+    hapticLight();
     setSubmittingEvent(true);
     try {
       await addShipmentEvent(shipmentId, {
@@ -109,6 +113,7 @@ export default function DriverShipmentDetailScreen() {
         note: eventNote || undefined,
       });
       setEventNote('');
+      hapticSuccess();
       loadData();
     } catch {
       Alert.alert('خطا', 'ثبت رویداد با خطا مواجه شد');
@@ -129,7 +134,9 @@ export default function DriverShipmentDetailScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
         <View style={styles.header}>
-          <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} onPress={() => navigation.goBack()} />
+          <Pressable onPress={() => { hapticLight(); navigation.goBack(); }}>
+            <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} />
+          </Pressable>
         </View>
         <Text style={styles.errorText}>{error || 'حمل‌ونقل یافت نشد'}</Text>
       </View>
@@ -142,11 +149,20 @@ export default function DriverShipmentDetailScreen() {
     <ScrollView
       style={styles.container}
       contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={[COLORS.blue]}
+          tintColor={COLORS.blue}
+        />
+      }
     >
       {/* Header */}
       <View style={styles.header}>
-        <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} onPress={() => navigation.goBack()} />
+        <Pressable onPress={() => { hapticLight(); navigation.goBack(); }}>
+          <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} />
+        </Pressable>
         <Text style={styles.headerTitle}>جزئیات حمل‌ونقل</Text>
         <View style={{ width: 24 }} />
       </View>
@@ -244,7 +260,7 @@ export default function DriverShipmentDetailScreen() {
             <Pressable
               key={et.value}
               style={[styles.pickerItem, eventType === et.value && styles.pickerItemActive]}
-              onPress={() => setEventType(et.value)}
+              onPress={() => { hapticLight(); setEventType(et.value); }}
             >
               <Text style={[styles.pickerText, eventType === et.value && styles.pickerTextActive]}>
                 {et.label}
@@ -264,7 +280,7 @@ export default function DriverShipmentDetailScreen() {
 
         <Pressable
           style={[styles.eventButton, submittingEvent && styles.buttonDisabled]}
-          onPress={handleAddEvent}
+          onPress={() => { hapticLight(); void handleAddEvent(); }}
           disabled={submittingEvent}
         >
           {submittingEvent ? (
