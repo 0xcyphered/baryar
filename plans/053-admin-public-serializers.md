@@ -1,4 +1,4 @@
-# Plan 050: Serialize all admin JSON through the existing public* helpers
+# Plan 053: Serialize all admin JSON through the existing public* helpers
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to

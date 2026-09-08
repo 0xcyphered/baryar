@@ -1,4 +1,4 @@
-# Plan 049: Gate matching and offers on an approved driver profile
+# Plan 052: Gate matching and offers on an approved driver profile
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to
@@ -156,7 +156,7 @@ they were already red at HEAD before your edits (`git stash` A/B). Plan
 - KYC / national-id inquiry APIs (Phase 2 §8).
 - `mobile/` / `admin/` UI copy for the new 403 (client follow-up).
 - Plan 035 CORS / global error handler.
-- Plan 050 serializers, 051 query unification, 052 test-helper migration.
+- Plan 053 serializers, 054 query unification, 055 test-helper migration.
 
 ## Git workflow
 
@@ -331,5 +331,5 @@ matching/offers/admin/cargo/shipments.
   route.
 - Reviewer: confirm rejected ≠ pending handling is the same 403 (no
   extra `driver_rejected` code).
-- Plan 051 will rewrite the matching query builder in the same file —
-  land 049 first so 051 does not also touch the verification lines.
+- Plan 054 will rewrite the matching query builder in the same file —
+  land 052 first so 054 does not also touch the verification lines.

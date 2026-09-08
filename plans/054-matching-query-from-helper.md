@@ -1,4 +1,4 @@
-# Plan 051: Drive matching list queries from vehicleFitsCargo (single eligibility source)
+# Plan 054: Drive matching list queries from vehicleFitsCargo (single eligibility source)
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to
@@ -21,7 +21,7 @@
 - **Priority**: P2
 - **Effort**: S
 - **Risk**: LOW
-- **Depends on**: plans/028-matching-filters-cancel-offers.md (DONE), plans/036-offer-matching-eligibility.md (DONE), plans/049-driver-verification-gate.md (soft — 049 edits the top of `listMatchingCargo` / `createOffer`; land 049 first so this plan's excerpts still apply)
+- **Depends on**: plans/028-matching-filters-cancel-offers.md (DONE), plans/036-offer-matching-eligibility.md (DONE), plans/052-driver-verification-gate.md (soft — 052 edits the top of `listMatchingCargo` / `createOffer`; land 052 first so this plan's excerpts still apply)
 - **Category**: tech-debt + tests
 - **Planned at**: commit `baaa248`, 2026-09-06
 
@@ -137,9 +137,9 @@ and `<=` are the whole rule — do not add `$or: [{weightKg:0}, ...]`.
   load every open cargo and `filter(vehicleFitsCargo)`).
 - `MAX_LIST` extraction (038 rejected).
 - `mobile/` / `admin/`.
-- Plan 049 verification (already a separate assert). If 049 is still
-  TODO, do not add `assertApprovedDriver` here — leave that to 049.
-- Plan 050 / 052.
+- Plan 052 verification (already a separate assert). If 052 is still
+  TODO, do not add `assertApprovedDriver` here — leave that to 052.
+- Plan 053 / 055.
 
 ## Git workflow
 

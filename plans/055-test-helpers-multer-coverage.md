@@ -1,4 +1,4 @@
-# Plan 052: Finish test-helper migration, map multer errors, raise coverage on remaining branches
+# Plan 055: Finish test-helper migration, map multer errors, raise coverage on remaining branches
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to
@@ -194,7 +194,7 @@ file.
 - Migrating `auth.test.js` onto helpers.
 - `mobile/` / `admin/` apps.
 - Changing multer limits or allowed MIME.
-- Plan 049/050/051 behaviour. If those have landed, keep their
+- Plan 052/053/054 behaviour. If those have landed, keep their
   assertions; do not revert serializers or verification.
 
 ## Git workflow
