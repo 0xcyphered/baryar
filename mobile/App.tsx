@@ -44,6 +44,7 @@ import MatchingCargoScreen from './src/screens/MatchingCargoScreen';
 import SubmitOfferScreen from './src/screens/SubmitOfferScreen';
 import DriverOffersScreen from './src/screens/DriverOffersScreen';
 import DriverShipmentDetailScreen from './src/screens/DriverShipmentDetailScreen';
+import CompanyDashboardScreen from './src/screens/CompanyDashboardScreen';
 
 import type { AppRole, MapMode, SegmentDistance, Waypoint } from './src/types';
 import {
@@ -76,6 +77,7 @@ export type AuthStackParamList = {
 
 export type MainTabParamList = {
   MapTab: undefined;
+  CompanyTab: undefined;
   CargoTab: undefined;
   DriverTab: undefined;
   ShipmentsTab: undefined;
@@ -122,7 +124,7 @@ export type RootStackParamList = {
 export const ROLE_TABS: Record<AppRole, readonly (keyof MainTabParamList)[]> = {
   cargo_owner: ['MapTab', 'CargoTab', 'ShipmentsTab', 'NotificationsTab'],
   driver: ['MapTab', 'DriverTab', 'ShipmentsTab', 'NotificationsTab'],
-  transport_company: ['MapTab', 'CargoTab', 'ShipmentsTab', 'NotificationsTab'],
+  transport_company: ['MapTab', 'CompanyTab', 'CargoTab', 'ShipmentsTab', 'NotificationsTab'],
 };
 
 // --- Nested stack screens ---
@@ -278,6 +280,7 @@ const TAB_CONFIG: Record<
   { label: string; icon: keyof typeof Ionicons.glyphMap }
 > = {
   MapTab: { label: 'نقشه', icon: 'map-outline' },
+  CompanyTab: { label: 'شرکت', icon: 'business-outline' },
   CargoTab: { label: 'بارها', icon: 'cube-outline' },
   DriverTab: { label: 'رانندگی', icon: 'car-sport-outline' },
   ShipmentsTab: { label: 'حمل‌ونقل', icon: 'car-outline' },
@@ -286,6 +289,7 @@ const TAB_CONFIG: Record<
 
 const TAB_COMPONENTS: Record<keyof MainTabParamList, React.ComponentType<any>> = {
   MapTab: MapStackScreen,
+  CompanyTab: CompanyDashboardScreen,
   CargoTab: CargoStackScreen,
   DriverTab: DriverStackScreen,
   ShipmentsTab: ShipmentStackScreen,
