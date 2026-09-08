@@ -26,7 +26,18 @@ describe('identity models', () => {
   });
 
   it('rejects an unknown role', async () => {
-    await expect(makeUser({ phone: '+989122222222', roles: ['company'] })).rejects.toThrow();
+    await expect(makeUser({ phone: '+989****2222', roles: ['company'] })).rejects.toThrow();
+  });
+
+  it('accepts transport_company role and pins the full ROLES enum', async () => {
+    const user = await makeUser({ phone: '+989****5555', roles: ['transport_company'] });
+    expect(user.roles).toEqual(['transport_company']);
+
+    const persisted = await User.findById(user._id);
+    expect(persisted.roles).toEqual(['transport_company']);
+
+    // transport_company = شرکت حمل و نقل (operator model correction 2026-09-08)
+    expect(User.ROLES).toEqual(['cargo_owner', 'driver', 'transport_company', 'admin']);
   });
 
   it('creates a driver profile 1-1 with user and a vehicle with unique plate', async () => {

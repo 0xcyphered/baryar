@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
-const ROLES = ['cargo_owner', 'driver', 'admin'];
+// transport_company = شرکت حمل و نقل
+const ROLES = ['cargo_owner', 'driver', 'transport_company', 'admin'];
 const STATUSES = ['active', 'blocked', 'deleted'];
 
 const userSchema = new mongoose.Schema(

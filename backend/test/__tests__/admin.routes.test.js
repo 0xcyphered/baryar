@@ -10,6 +10,7 @@ const PHONE_ADMIN = '09121230501';
 const PHONE_OWNER = '09121230502';
 const PHONE_DRIVER = '09121230503';
 const PHONE_REGULAR = '09121230504';
+const PHONE_COMPANY = '09121230505';
 const canon = (phone) => `+98${phone.slice(1)}`;
 const FIXED_CODE = '123456';
 const JWT_SECRET = 'test-secret-do-not-use';
@@ -138,6 +139,25 @@ describe('admin routes', () => {
     expect(res.status).toBe(200);
     for (const u of res.body.users) {
       expect(u.roles).toContain('cargo_owner');
+    }
+  });
+
+  test('GET /api/admin/users?role=transport_company filters by role', async () => {
+    const { token: admTok } = await createAdmin();
+    await User.create({
+      phone: canon(PHONE_COMPANY),
+      roles: ['transport_company'],
+      phoneVerifiedAt: new Date(),
+      status: 'active',
+    });
+
+    const res = await request(app)
+      .get('/api/admin/users?role=transport_company')
+      .set('Authorization', `Bearer ${admTok}`);
+    expect(res.status).toBe(200);
+    expect(res.body.users.length).toBeGreaterThan(0);
+    for (const u of res.body.users) {
+      expect(u.roles).toContain('transport_company');
     }
   });
 
