@@ -11,6 +11,8 @@ const PHONE_OWNER2 = '09121230202';
 const PHONE_DRIVER = '09121230203';
 const PHONE_DRIVER2 = '09121230204';
 const PHONE_PURE_DRIVER = '09121230205';
+const PHONE_PENDING_DRV = '09121230206';
+const PHONE_REJECTED_DRV = '09121230207';
 
 describe('offers routes', () => {
   const app = createApp();
@@ -626,5 +628,43 @@ describe('offers routes', () => {
       .set('Authorization', `Bearer ${driverToken}`);
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: 'not_found' });
+  });
+
+  // --- Plan 052: driver verification gate ---
+
+  test('pending driver POST /api/offers gets 403 driver_unverified', async () => {
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: pendingToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_PENDING_DRV, 'PNDVOF1IR1');
+    // Undo the approval: set profile back to pending
+    const DriverProfile = require('../../src/models/DriverProfile');
+    const pendingUser = await User.findOne({ phone: canon(PHONE_PENDING_DRV) });
+    await DriverProfile.updateOne({ userId: pendingUser._id }, { verificationStatus: 'pending', verifiedAt: null });
+    const cargoId = await h.publishCargo(ownerToken);
+
+    const res = await request(app)
+      .post('/api/offers')
+      .set('Authorization', `Bearer ${pendingToken}`)
+      .send({ cargoId, vehicleId, priceRial: 5000000 });
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: 'driver_unverified' });
+    expect(await Offer.countDocuments()).toBe(0);
+  });
+
+  test('rejected driver POST /api/offers gets 403 driver_unverified', async () => {
+    const { token: ownerToken } = await h.register(PHONE_OWNER);
+    const { token: rejectedToken, vehicleId } = await h.setupDriverWithVehicle(PHONE_REJECTED_DRV, 'RJTVOF1IR1');
+    // Set profile to rejected
+    const DriverProfile = require('../../src/models/DriverProfile');
+    const rejectedUser = await User.findOne({ phone: canon(PHONE_REJECTED_DRV) });
+    await DriverProfile.updateOne({ userId: rejectedUser._id }, { verificationStatus: 'rejected', rejectionReason: 'bad docs' });
+    const cargoId = await h.publishCargo(ownerToken);
+
+    const res = await request(app)
+      .post('/api/offers')
+      .set('Authorization', `Bearer ${rejectedToken}`)
+      .send({ cargoId, vehicleId, priceRial: 5000000 });
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: 'driver_unverified' });
+    expect(await Offer.countDocuments()).toBe(0);
   });
 });

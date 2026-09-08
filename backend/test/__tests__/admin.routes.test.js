@@ -48,6 +48,11 @@ describe('admin routes', () => {
       .post('/api/driver/profile')
       .set('Authorization', `Bearer ${token}`)
       .send({ licenseNumber: 'L-ADM-001' });
+    const DriverProfile = require('../../src/models/DriverProfile');
+    await DriverProfile.updateOne(
+      { userId },
+      { verificationStatus: 'approved', verifiedAt: new Date() }
+    );
     return { token, userId };
   }
 

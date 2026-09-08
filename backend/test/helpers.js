@@ -90,12 +90,26 @@ function makeHelpers(app) {
     return id;
   }
 
+  async function approveDriver(userId) {
+    const DriverProfile = require('../src/models/DriverProfile');
+    const profile = await DriverProfile.findOneAndUpdate(
+      { userId },
+      { verificationStatus: 'approved', verifiedAt: new Date(), rejectionReason: '' },
+      { new: true }
+    );
+    if (!profile) {
+      throw new Error(`approveDriver: no DriverProfile for ${userId}`);
+    }
+    return profile;
+  }
+
   async function setupDriverWithVehicle(phone, plateOrOverrides) {
-    const { token } = await registerDriverViaProfile(phone);
+    const { token, userId } = await registerDriverViaProfile(phone);
     const overrides = typeof plateOrOverrides === 'string'
       ? { plate: plateOrOverrides }
       : (plateOrOverrides || {});
     const vehicleId = await createVehicle(token, overrides);
+    await approveDriver(userId);
     return { token, vehicleId };
   }
 
@@ -132,6 +146,7 @@ function makeHelpers(app) {
     register,
     registerDriverViaProfile,
     createVehicle,
+    approveDriver,
     publishCargo,
     setupDriverWithVehicle,
     createAdmin,

@@ -15,6 +15,7 @@ const MATCHING_ERRORS = {
   validation_error: 400,
   offer_exists: 409,
   forbidden: 403,
+  driver_unverified: 403,
   not_found: 404,
   invalid_status: 409,
 };

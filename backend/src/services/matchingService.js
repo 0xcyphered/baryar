@@ -1,6 +1,7 @@
 const Cargo = require("../models/Cargo");
 const Offer = require("../models/Offer");
 const Vehicle = require("../models/Vehicle");
+const DriverProfile = require("../models/DriverProfile");
 const shipmentService = require("./shipmentService");
 const notificationService = require("./notificationService");
 const { fail } = require("../utils/httpError");
@@ -61,12 +62,24 @@ function vehicleFitsCargo(vehicle, cargo) {
   return true;
 }
 
+// Fail-closed gate: missing profile, pending, or rejected → 403.
+// Both listMatchingCargo and createOffer call this as their first await.
+async function assertApprovedDriver(userId) {
+  const profile = await DriverProfile.findOne({ userId });
+  if (!profile || profile.verificationStatus !== "approved") {
+    fail("driver_unverified");
+  }
+  return profile;
+}
+
 // --- Driver side ---
 
 // List open cargo matching the driver's vehicle capacity + origin location.
 // capacityWeightKg is >= 0 by schema (min: 0), so "weight is 0 (unspecified)
 // OR weight <= capacity" is exactly "weight <= capacity".
 async function listMatchingCargo({ userId, vehicleId, lat, lng, radiusKm }) {
+  await assertApprovedDriver(userId);
+
   const hasLat = hasValue(lat);
   const hasLng = hasValue(lng);
   if (hasLat !== hasLng) fail("validation_error");
@@ -114,6 +127,8 @@ async function listMatchingCargo({ userId, vehicleId, lat, lng, radiusKm }) {
 async function createOffer({ userId, cargoId, vehicleId, body }) {
   assertId(cargoId, "invalid_cargo_id");
   assertId(vehicleId, "invalid_vehicle_id");
+
+  await assertApprovedDriver(userId);
 
   const cargo = await Cargo.findOne({ _id: cargoId, status: "open" });
   if (!cargo) fail("invalid_status");
@@ -308,6 +323,7 @@ function publicOffer(offer) {
 module.exports = {
   listMatchingCargo,
   createOffer,
+  assertApprovedDriver,
   vehicleFitsCargo,
   listMyOffers,
   updateOffer,

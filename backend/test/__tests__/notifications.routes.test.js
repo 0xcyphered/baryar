@@ -32,6 +32,11 @@ describe('notifications routes', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ licenseNumber: 'L-NOTIF-001' });
     expect([200, 201]).toContain(res.status);
+    const DriverProfile = require('../../src/models/DriverProfile');
+    await DriverProfile.updateOne(
+      { userId },
+      { verificationStatus: 'approved', verifiedAt: new Date() }
+    );
     return { token, userId };
   }
 
