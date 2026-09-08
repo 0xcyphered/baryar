@@ -44,10 +44,14 @@ async function findOwnedActiveVehicle({ userId, vehicleId }) {
   return vehicle;
 }
 
-// Shared Phase 1 compatibility matrix (plan 028 list + plan 036 write).
-// Vehicle is a road asset: land/multimodal only. Refrigerated cargo needs
-// a reefer. Weight/volume treat 0 as "unspecified" on cargo (schema min 0)
-// so `$lte` / `<=` is the whole rule.
+// Shared Phase 1 compatibility matrix (plan 028 list + plan 036 write +
+// plan 054 query translator). Vehicle is a road asset: land/multimodal only.
+// Refrigerated cargo needs a reefer. Weight/volume treat 0 as "unspecified"
+// on cargo (schema min 0) so `$lte` / `<=` is the whole rule.
+//
+// INVARIANT: matchingQueryForVehicle must be a mechanical translation of
+// vehicleFitsCargo into Mongo predicates. If you add a rule to one, add it
+// to the other in the same commit.
 function vehicleFitsCargo(vehicle, cargo) {
   const mode = cargo.transportMode || "land";
   if (mode !== "land" && mode !== "multimodal") return false;
@@ -60,6 +64,21 @@ function vehicleFitsCargo(vehicle, cargo) {
     return false;
   }
   return true;
+}
+
+// Mongo predicate translation of vehicleFitsCargo — single source of
+// truth for the list path (plan 054). Used by listMatchingCargo; the
+// write path (createOffer) still calls vehicleFitsCargo directly.
+function matchingQueryForVehicle(vehicle) {
+  const query = {
+    "dimensions.weightKg": { $lte: vehicle.capacityWeightKg },
+    "dimensions.volumeM3": { $lte: vehicle.capacityVolumeM3 },
+    transportMode: { $in: ["land", "multimodal"] },
+  };
+  if (vehicle.vehicleType !== "reefer") {
+    query.specialCharacteristics = { $nin: ["refrigerated"] };
+  }
+  return query;
 }
 
 // Fail-closed gate: missing profile, pending, or rejected → 403.
@@ -103,19 +122,10 @@ async function listMatchingCargo({ userId, vehicleId, lat, lng, radiusKm }) {
 
   if (hasValue(vehicleId)) {
     const vehicle = await findOwnedActiveVehicle({ userId, vehicleId });
-    query["dimensions.weightKg"] = { $lte: vehicle.capacityWeightKg };
-    query["dimensions.volumeM3"] = { $lte: vehicle.capacityVolumeM3 };
     // Phase 1 compatibility matrix: Vehicle is a road asset, so it can only
     // take land/multimodal cargo. sea/air/rail stay hidden whenever a
-    // vehicleId is supplied. No vehicleType equality against cargo — cargo
-    // has no vehicle-type field (plan 013 decision, kept in 028).
-    query.transportMode = { $in: ["land", "multimodal"] };
-    // Reefer rule: refrigerated cargo needs a reefer vehicle. Other specials
-    // (hazardous, fragile, ...) have no matching vehicle class and do not
-    // exclude anything.
-    if (vehicle.vehicleType !== "reefer") {
-      query.specialCharacteristics = { $nin: ["refrigerated"] };
-    }
+    // vehicleId is supplied. Query translated from vehicleFitsCargo (054).
+    Object.assign(query, matchingQueryForVehicle(vehicle));
   }
 
   if (sortByDistance) {
@@ -325,6 +335,7 @@ module.exports = {
   createOffer,
   assertApprovedDriver,
   vehicleFitsCargo,
+  matchingQueryForVehicle,
   listMyOffers,
   updateOffer,
   withdrawOffer,
