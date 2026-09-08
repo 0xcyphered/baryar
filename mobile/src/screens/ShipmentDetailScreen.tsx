@@ -11,16 +11,18 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme';
-import { getShipment, listShipmentEvents } from '../services/shipmentsApi';
+import { COLORS, space, radii, shadows, font } from '../theme';
+import { getShipment, getShipmentCargo, listShipmentEvents } from '../services/shipmentsApi';
 import { hapticLight } from '../utils/haptics';
-import type { Shipment, ShipmentEvent } from '../types';
+import type { Shipment, ShipmentEvent, Cargo } from '../types';
 import {
   SHIPMENT_STATUS_COLORS,
   SHIPMENT_STATUS_LABELS,
   EVENT_TYPE_LABELS,
   EVENT_ICONS,
-  formatId,
+  MODE_LABELS,
+  SPECIAL_LABELS,
+  formatCoord,
 } from '../utils/constants';
 
 type ParamList = {
@@ -35,6 +37,7 @@ export default function ShipmentDetailScreen() {
   const shipmentId = params.shipmentId || '';
 
   const [shipment, setShipment] = useState<Shipment | null>(null);
+  const [cargo, setCargo] = useState<Cargo | null>(null);
   const [events, setEvents] = useState<ShipmentEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -48,6 +51,9 @@ export default function ShipmentDetailScreen() {
       ]);
       setShipment(s);
       setEvents(evts);
+      // Fetch cargo details in parallel too — swallows error silently
+      // so the main shipment info still renders.
+      getShipmentCargo(shipmentId).then(setCargo).catch(() => {});
       setError(null);
     } catch {
       setError('خطا در بارگیری اطلاعات حمل‌ونقل');
@@ -71,7 +77,7 @@ export default function ShipmentDetailScreen() {
 
   if (loading && !refreshing) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingTop: insets.top + 16 }]}>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingTop: insets.top + space[4] }]}>
         <ActivityIndicator size="large" color={COLORS.blue} />
       </View>
     );
@@ -79,7 +85,7 @@ export default function ShipmentDetailScreen() {
 
   if (error || !shipment) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
+      <View style={[styles.container, { paddingTop: insets.top + space[4] }]}>
         <View style={styles.header}>
           <Pressable onPress={() => { hapticLight(); navigation.goBack(); }}>
             <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} />
@@ -93,7 +99,7 @@ export default function ShipmentDetailScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }}
+      contentContainerStyle={{ paddingTop: insets.top + space[4], paddingBottom: insets.bottom + space[6] }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -114,18 +120,73 @@ export default function ShipmentDetailScreen() {
 
       {/* Status badge */}
       <View style={styles.statusRow}>
-        <View style={[styles.statusBadge, { backgroundColor: SHIPMENT_STATUS_COLORS[shipment.status] || '#9ca3af' }]}>
+        <View style={[styles.statusBadge, { backgroundColor: SHIPMENT_STATUS_COLORS[shipment.status] || COLORS.gray }]}>
           <Text style={styles.statusBadgeText}>{SHIPMENT_STATUS_LABELS[shipment.status] || shipment.status}</Text>
         </View>
       </View>
 
-      {/* Info card */}
+      {/* Cargo info card (plan 037) */}
       <View style={styles.infoCard}>
-        <InfoRow label="شناسه بار" value={formatId(shipment.cargoId)} />
-        <InfoRow label="شناسه پیشنهاد" value={formatId(shipment.offerId)} />
-        <InfoRow label="شناسه راننده" value={formatId(shipment.driverUserId)} />
-        <InfoRow label="شناسه وسیله" value={formatId(shipment.vehicleId)} />
-        {shipment.pickupAt && (
+        {cargo ? (
+          <>
+            {/* Cargo title */}
+            <Text style={styles.cargoTitle}>{cargo.title || 'بار بدون عنوان'}</Text>
+
+            {/* Route row: origin → destination */}
+            <View style={styles.routeRow}>
+              <Ionicons name="location-outline" size={14} color={COLORS.blue} />
+              <Text style={styles.routeText} numberOfLines={1}>
+                {formatCoord(cargo.origin)}
+              </Text>
+              <Ionicons name="arrow-back" size={12} color={COLORS.gray} style={{ marginHorizontal: space[1] }} />
+              <Ionicons name="location" size={14} color={COLORS.red} />
+              <Text style={styles.routeText} numberOfLines={1}>
+                {formatCoord(cargo.destination)}
+              </Text>
+            </View>
+
+            {/* Dimensions summary */}
+            <View style={styles.dimRow}>
+              <Text style={styles.dimLabel}>وزن</Text>
+              <Text style={styles.dimValue}>{(cargo.dimensions.weightKg / 1000).toFixed(1)} تن</Text>
+              <Text style={styles.dimDivider}>·</Text>
+              <Text style={styles.dimLabel}>حجم</Text>
+              <Text style={styles.dimValue}>{cargo.dimensions.volumeM3} م³</Text>
+              <Text style={styles.dimDivider}>·</Text>
+              <Text style={styles.dimLabel}>ابعاد</Text>
+              <Text style={styles.dimValue}>{cargo.dimensions.lengthCm}×{cargo.dimensions.widthCm}×{cargo.dimensions.heightCm}</Text>
+            </View>
+
+            {/* Transport mode + specials */}
+            <View style={styles.tagsRow}>
+              <View style={styles.tag}>
+                <Ionicons name="subway-outline" size={12} color={COLORS.blue} />
+                <Text style={styles.tagText}>{MODE_LABELS[cargo.transportMode] || cargo.transportMode}</Text>
+              </View>
+              {cargo.specialCharacteristics?.map((sc) => (
+                <View key={sc} style={[styles.tag, { backgroundColor: COLORS.amberTint }]}>
+                  <Text style={[styles.tagText, { color: COLORS.amber }]}>{SPECIAL_LABELS[sc] || sc}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Timing */}
+            {cargo.pickupAt && (
+              <InfoRow label="زمان بارگیری" value={new Date(cargo.pickupAt).toLocaleDateString('fa-IR')} />
+            )}
+            {cargo.deliverBy && (
+              <InfoRow label="زمان تحویل" value={new Date(cargo.deliverBy).toLocaleDateString('fa-IR')} />
+            )}
+          </>
+        ) : (
+          /* Fallback: no cargo loaded yet — show IDs */
+          <InfoRow label="شناسه بار" value={shipment.cargoId.slice(0, 8) + '...'} />
+        )}
+
+        {/* Driver + vehicle IDs (smaller) */}
+        <InfoRow label="شناسه راننده" value={shipment.driverUserId.slice(0, 8) + '...'} />
+        <InfoRow label="شناسه وسیله" value={shipment.vehicleId.slice(0, 8) + '...'} />
+        {shipment.pickupAt && cargo && (
           <InfoRow label="زمان بارگیری" value={new Date(shipment.pickupAt).toLocaleDateString('fa-IR')} />
         )}
         {shipment.deliveredAt && (
@@ -146,7 +207,7 @@ export default function ShipmentDetailScreen() {
             const dotColor = event.eventType === 'status_change'
               ? COLORS.blue
               : event.eventType === 'customs_stop'
-                ? '#f59e0b'
+                ? COLORS.amber
                 : COLORS.gray;
 
             return (
@@ -195,18 +256,18 @@ const infoStyles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: space[2],
     borderBottomWidth: 0.5,
     borderBottomColor: COLORS.grayLight,
   },
   label: {
     fontSize: 12,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.gray,
   },
   value: {
     fontSize: 13,
-    fontFamily: 'Vazirmatn_500Medium',
+    fontFamily: font.medium,
     color: COLORS.textDark,
   },
 });
@@ -217,59 +278,114 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    paddingHorizontal: space[4],
+    marginBottom: space[3],
   },
   headerTitle: {
     fontSize: 17,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
     color: COLORS.textDark,
     flex: 1,
     textAlign: 'center',
   },
   statusRow: {
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: space[3] + 2,
   },
   statusBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingHorizontal: space[4],
+    paddingVertical: space[1] + 2,
+    borderRadius: radii.lg,
   },
   statusBadgeText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 14,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
   },
   infoCard: {
     backgroundColor: COLORS.white,
-    marginHorizontal: 16,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
+    marginHorizontal: space[4],
+    borderRadius: radii.lg,
+    paddingHorizontal: space[3] + 2,
+    paddingVertical: space[2],
+    ...shadows.sm,
+  },
+  cargoTitle: {
+    fontSize: 16,
+    fontFamily: font.bold,
+    color: COLORS.textDark,
+    marginBottom: space[2],
+  },
+  routeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: space[2],
+    gap: 4,
+  },
+  routeText: {
+    fontSize: 13,
+    fontFamily: font.medium,
+    color: COLORS.textMid,
+    flex: 1,
+  },
+  dimRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: space[2],
+  },
+  dimLabel: {
+    fontSize: 12,
+    fontFamily: font.regular,
+    color: COLORS.gray,
+  },
+  dimValue: {
+    fontSize: 12,
+    fontFamily: font.medium,
+    color: COLORS.textDark,
+  },
+  dimDivider: {
+    fontSize: 14,
+    color: COLORS.grayLight,
+    marginHorizontal: 2,
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: space[2],
+  },
+  tag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: space[2],
+    paddingVertical: space[1],
+    borderRadius: radii.sm,
+    backgroundColor: COLORS.blueTint,
+  },
+  tagText: {
+    fontSize: 12,
+    fontFamily: font.medium,
+    color: COLORS.blue,
   },
   sectionTitle: {
     fontSize: 16,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
     color: COLORS.textDark,
-    marginHorizontal: 16,
-    marginTop: 20,
-    marginBottom: 12,
+    marginHorizontal: space[4],
+    marginTop: space[5],
+    marginBottom: space[3],
   },
   noEventsText: {
     fontSize: 13,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.gray,
     textAlign: 'center',
-    marginTop: 12,
+    marginTop: space[3],
   },
   timeline: {
-    marginHorizontal: 16,
+    marginHorizontal: space[4],
   },
   timelineItem: {
     flexDirection: 'row',
@@ -293,7 +409,7 @@ const styles = StyleSheet.create({
   },
   timelineContent: {
     flex: 1,
-    marginLeft: 8,
+    marginEnd: space[2],
     paddingBottom: 16,
   },
   timelineHeader: {
@@ -304,30 +420,30 @@ const styles = StyleSheet.create({
   },
   timelineType: {
     fontSize: 13,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
     color: COLORS.textDark,
   },
   timelineStatus: {
     fontSize: 12,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.textMid,
     marginBottom: 2,
   },
   timelineNote: {
     fontSize: 12,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.textMid,
     marginBottom: 2,
   },
   timelineTime: {
     fontSize: 11,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.gray,
   },
   errorText: {
     color: COLORS.red,
     fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     textAlign: 'center',
     marginTop: 40,
   },

@@ -13,16 +13,18 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme';
-import { getShipment, listShipmentEvents, transitionShipment, addShipmentEvent } from '../services/shipmentsApi';
+import { COLORS, space, radii, shadows, font } from '../theme';
+import { getShipment, getShipmentCargo, listShipmentEvents, transitionShipment, addShipmentEvent } from '../services/shipmentsApi';
 import { hapticLight, hapticSuccess } from '../utils/haptics';
-import type { Shipment, ShipmentEvent } from '../types';
+import type { Shipment, ShipmentEvent, Cargo } from '../types';
 import {
   SHIPMENT_STATUS_LABELS,
   SHIPMENT_STATUS_COLORS,
   EVENT_TYPE_LABELS,
   EVENT_ICONS,
-  formatId,
+  MODE_LABELS,
+  SPECIAL_LABELS,
+  formatCoord,
 } from '../utils/constants';
 
 const TRANSITIONS: Record<string, string[]> = {
@@ -51,6 +53,7 @@ export default function DriverShipmentDetailScreen() {
   const shipmentId = params.shipmentId || '';
 
   const [shipment, setShipment] = useState<Shipment | null>(null);
+  const [cargo, setCargo] = useState<Cargo | null>(null);
   const [events, setEvents] = useState<ShipmentEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -70,6 +73,7 @@ export default function DriverShipmentDetailScreen() {
       ]);
       setShipment(s);
       setEvents(evts);
+      getShipmentCargo(shipmentId).then(setCargo).catch(() => {});
       setError(null);
     } catch {
       setError('خطا در بارگیری اطلاعات حمل‌ونقل');
@@ -84,7 +88,7 @@ export default function DriverShipmentDetailScreen() {
 
   const handleTransition = (nextStatus: string) => {
     hapticLight();
-    Alert.alert('تغییر وضعیت', `آیا مطمئن هستید وضعیت به "${SHIPMENT_STATUS_LABELS[nextStatus]}" تغییر کند؟`, [
+    Alert.alert('تغییر وضعیت', `آیا مطمئن هستید وضعیت به \"${SHIPMENT_STATUS_LABELS[nextStatus]}\" تغییر کند؟`, [
       { text: 'لغو', style: 'cancel' },
       {
         text: 'بله',
@@ -124,7 +128,7 @@ export default function DriverShipmentDetailScreen() {
 
   if (loading && !refreshing) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingTop: insets.top + 16 }]}>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingTop: insets.top + space[4] }]}>
         <ActivityIndicator size="large" color={COLORS.blue} />
       </View>
     );
@@ -132,7 +136,7 @@ export default function DriverShipmentDetailScreen() {
 
   if (error || !shipment) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
+      <View style={[styles.container, { paddingTop: insets.top + space[4] }]}>
         <View style={styles.header}>
           <Pressable onPress={() => { hapticLight(); navigation.goBack(); }}>
             <Ionicons name="arrow-forward" size={24} color={COLORS.textDark} />
@@ -148,7 +152,7 @@ export default function DriverShipmentDetailScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }}
+      contentContainerStyle={{ paddingTop: insets.top + space[4], paddingBottom: insets.bottom + space[6] }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -169,17 +173,68 @@ export default function DriverShipmentDetailScreen() {
 
       {/* Status badge */}
       <View style={styles.statusRow}>
-        <View style={[styles.statusBadge, { backgroundColor: SHIPMENT_STATUS_COLORS[shipment.status] || '#9ca3af' }]}>
+        <View style={[styles.statusBadge, { backgroundColor: SHIPMENT_STATUS_COLORS[shipment.status] || COLORS.gray }]}>
           <Text style={styles.statusBadgeText}>{SHIPMENT_STATUS_LABELS[shipment.status] || shipment.status}</Text>
         </View>
       </View>
 
-      {/* Info card */}
+      {/* Cargo info card (plan 037) */}
       <View style={styles.infoCard}>
-        <InfoRow label="شناسه بار" value={formatId(shipment.cargoId)} />
-        <InfoRow label="شناسه پیشنهاد" value={formatId(shipment.offerId)} />
-        <InfoRow label="شناسه وسیله" value={formatId(shipment.vehicleId)} />
-        {shipment.pickupAt && (
+        {cargo ? (
+          <>
+            <Text style={styles.cargoTitle}>{cargo.title || 'بار بدون عنوان'}</Text>
+
+            {/* Route row */}
+            <View style={styles.routeRow}>
+              <Ionicons name="location-outline" size={14} color={COLORS.blue} />
+              <Text style={styles.routeText} numberOfLines={1}>
+                {formatCoord(cargo.origin)}
+              </Text>
+              <Ionicons name="arrow-back" size={12} color={COLORS.gray} style={{ marginHorizontal: space[1] }} />
+              <Ionicons name="location" size={14} color={COLORS.red} />
+              <Text style={styles.routeText} numberOfLines={1}>
+                {formatCoord(cargo.destination)}
+              </Text>
+            </View>
+
+            {/* Dimensions */}
+            <View style={styles.dimRow}>
+              <Text style={styles.dimLabel}>وزن</Text>
+              <Text style={styles.dimValue}>{(cargo.dimensions.weightKg / 1000).toFixed(1)} تن</Text>
+              <Text style={styles.dimDivider}>·</Text>
+              <Text style={styles.dimLabel}>حجم</Text>
+              <Text style={styles.dimValue}>{cargo.dimensions.volumeM3} م³</Text>
+              <Text style={styles.dimDivider}>·</Text>
+              <Text style={styles.dimLabel}>ابعاد</Text>
+              <Text style={styles.dimValue}>{cargo.dimensions.lengthCm}×{cargo.dimensions.widthCm}×{cargo.dimensions.heightCm}</Text>
+            </View>
+
+            {/* Tags */}
+            <View style={styles.tagsRow}>
+              <View style={styles.tag}>
+                <Ionicons name="subway-outline" size={12} color={COLORS.blue} />
+                <Text style={styles.tagText}>{MODE_LABELS[cargo.transportMode] || cargo.transportMode}</Text>
+              </View>
+              {cargo.specialCharacteristics?.map((sc) => (
+                <View key={sc} style={[styles.tag, { backgroundColor: COLORS.amberTint }]}>
+                  <Text style={[styles.tagText, { color: COLORS.amber }]}>{SPECIAL_LABELS[sc] || sc}</Text>
+                </View>
+              ))}
+            </View>
+
+            {cargo.pickupAt && (
+              <InfoRow label="زمان بارگیری" value={new Date(cargo.pickupAt).toLocaleDateString('fa-IR')} />
+            )}
+            {cargo.deliverBy && (
+              <InfoRow label="زمان تحویل" value={new Date(cargo.deliverBy).toLocaleDateString('fa-IR')} />
+            )}
+          </>
+        ) : (
+          <InfoRow label="شناسه بار" value={shipment.cargoId.slice(0, 8) + '...'} />
+        )}
+
+        <InfoRow label="شناسه وسیله" value={shipment.vehicleId.slice(0, 8) + '...'} />
+        {shipment.pickupAt && cargo && (
           <InfoRow label="زمان بارگیری" value={new Date(shipment.pickupAt).toLocaleDateString('fa-IR')} />
         )}
         {shipment.deliveredAt && (
@@ -200,7 +255,7 @@ export default function DriverShipmentDetailScreen() {
             const dotColor = event.eventType === 'status_change'
               ? COLORS.blue
               : event.eventType === 'customs_stop'
-                ? '#f59e0b'
+                ? COLORS.amber
                 : COLORS.gray;
 
             return (
@@ -284,7 +339,7 @@ export default function DriverShipmentDetailScreen() {
           disabled={submittingEvent}
         >
           {submittingEvent ? (
-            <ActivityIndicator size="small" color="#fff" />
+            <ActivityIndicator size="small" color={COLORS.white} />
           ) : (
             <Text style={styles.eventButtonText}>ثبت رویداد</Text>
           )}
@@ -308,18 +363,18 @@ const infoStyles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: space[2],
     borderBottomWidth: 0.5,
     borderBottomColor: COLORS.grayLight,
   },
   label: {
     fontSize: 12,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.gray,
   },
   value: {
     fontSize: 13,
-    fontFamily: 'Vazirmatn_500Medium',
+    fontFamily: font.medium,
     color: COLORS.textDark,
   },
 });
@@ -330,63 +385,118 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    paddingHorizontal: space[4],
+    marginBottom: space[3],
   },
   headerTitle: {
     fontSize: 17,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
     color: COLORS.textDark,
     flex: 1,
     textAlign: 'center',
   },
   statusRow: {
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: space[3] + 2,
   },
   statusBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingHorizontal: space[4],
+    paddingVertical: space[1] + 2,
+    borderRadius: radii.lg,
   },
   statusBadgeText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 14,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
   },
   infoCard: {
     backgroundColor: COLORS.white,
-    marginHorizontal: 16,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
+    marginHorizontal: space[4],
+    borderRadius: radii.lg,
+    paddingHorizontal: space[3] + 2,
+    paddingVertical: space[2],
+    ...shadows.sm,
+  },
+  cargoTitle: {
+    fontSize: 16,
+    fontFamily: font.bold,
+    color: COLORS.textDark,
+    marginBottom: space[2],
+  },
+  routeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: space[2],
+    gap: 4,
+  },
+  routeText: {
+    fontSize: 13,
+    fontFamily: font.medium,
+    color: COLORS.textMid,
+    flex: 1,
+  },
+  dimRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: space[2],
+  },
+  dimLabel: {
+    fontSize: 12,
+    fontFamily: font.regular,
+    color: COLORS.gray,
+  },
+  dimValue: {
+    fontSize: 12,
+    fontFamily: font.medium,
+    color: COLORS.textDark,
+  },
+  dimDivider: {
+    fontSize: 14,
+    color: COLORS.grayLight,
+    marginHorizontal: 2,
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: space[2],
+  },
+  tag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: space[2],
+    paddingVertical: space[1],
+    borderRadius: radii.sm,
+    backgroundColor: COLORS.blueTint,
+  },
+  tagText: {
+    fontSize: 12,
+    fontFamily: font.medium,
+    color: COLORS.blue,
   },
   sectionTitle: {
     fontSize: 16,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
     color: COLORS.textDark,
-    marginHorizontal: 16,
-    marginTop: 20,
-    marginBottom: 12,
+    marginHorizontal: space[4],
+    marginTop: space[5],
+    marginBottom: space[3],
   },
   noEventsText: {
     fontSize: 13,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.gray,
     textAlign: 'center',
-    marginTop: 12,
+    marginTop: space[3],
   },
-  timeline: { marginHorizontal: 16 },
+  timeline: { marginHorizontal: space[4] },
   timelineItem: { flexDirection: 'row', minHeight: 64 },
   timelineLeft: { width: 24, alignItems: 'center' },
   timelineDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
   timelineLine: { width: 2, flex: 1, backgroundColor: COLORS.grayLight, marginTop: 4 },
-  timelineContent: { flex: 1, marginLeft: 8, paddingBottom: 16 },
+  timelineContent: { flex: 1, marginEnd: space[2], paddingBottom: 16 },
   timelineHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -395,63 +505,63 @@ const styles = StyleSheet.create({
   },
   timelineType: {
     fontSize: 13,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
     color: COLORS.textDark,
   },
   timelineStatus: {
     fontSize: 12,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.textMid,
     marginBottom: 2,
   },
   timelineNote: {
     fontSize: 12,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.textMid,
     marginBottom: 2,
   },
   timelineTime: {
     fontSize: 11,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.gray,
   },
   transitionRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginHorizontal: 16,
+    marginHorizontal: space[4],
   },
   transitionButton: {
     backgroundColor: COLORS.blue,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    borderRadius: radii.md,
+    paddingHorizontal: space[4],
+    paddingVertical: space[2] + 2,
   },
   transitionText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 13,
-    fontFamily: 'Vazirmatn_700Bold',
+    fontFamily: font.bold,
   },
   eventForm: {
-    marginHorizontal: 16,
+    marginHorizontal: space[4],
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: radii.lg,
+    padding: space[3] + 2,
   },
   label: {
     fontSize: 12,
-    fontFamily: 'Vazirmatn_500Medium',
+    fontFamily: font.medium,
     color: COLORS.textDark,
-    marginBottom: 4,
-    marginTop: 8,
+    marginBottom: space[1],
+    marginTop: space[2],
   },
   input: {
     backgroundColor: COLORS.grayLight,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: radii.sm,
+    paddingHorizontal: space[3],
+    paddingVertical: space[2] + 2,
     fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     color: COLORS.textDark,
     writingDirection: 'rtl',
   },
@@ -459,30 +569,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 4,
+    marginBottom: space[1],
   },
   pickerItem: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: space[2] + 2,
+    paddingVertical: space[1] + 2,
+    borderRadius: radii.sm,
     backgroundColor: COLORS.grayLight,
   },
   pickerItemActive: { backgroundColor: COLORS.blue },
-  pickerText: { fontSize: 12, fontFamily: 'Vazirmatn_500Medium', color: COLORS.textDark },
-  pickerTextActive: { color: '#fff' },
+  pickerText: { fontSize: 12, fontFamily: font.medium, color: COLORS.textDark },
+  pickerTextActive: { color: COLORS.white },
   eventButton: {
     backgroundColor: COLORS.blue,
-    borderRadius: 10,
-    paddingVertical: 12,
+    borderRadius: radii.md,
+    paddingVertical: space[3],
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: space[3],
   },
-  eventButtonText: { color: '#fff', fontSize: 14, fontFamily: 'Vazirmatn_700Bold' },
+  eventButtonText: { color: COLORS.white, fontSize: 14, fontFamily: font.bold },
   buttonDisabled: { opacity: 0.6 },
   errorText: {
     color: COLORS.red,
     fontSize: 14,
-    fontFamily: 'Vazirmatn_400Regular',
+    fontFamily: font.regular,
     textAlign: 'center',
     marginTop: 40,
   },

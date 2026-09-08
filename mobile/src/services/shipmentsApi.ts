@@ -1,5 +1,5 @@
 import { apiFetch } from './apiClient';
-import type { Shipment, ShipmentEvent } from '../types';
+import type { Shipment, ShipmentEvent, Cargo } from '../types';
 
 interface ShipmentListResponse { shipments: Shipment[]; count: number; }
 interface ShipmentSingleResponse { shipment: Shipment; }
@@ -25,6 +25,11 @@ export async function listShipmentEvents(id: string): Promise<ShipmentEvent[]> {
 }
 
 interface EventResponse { event: ShipmentEvent; }
+
+export async function getShipmentCargo(id: string): Promise<Cargo> {
+  const res = await apiFetch<{ cargo: Cargo }>(`/api/shipments/${id}/cargo`);
+  return res.cargo;
+}
 
 export async function transitionShipment(id: string, toStatus: string): Promise<Shipment> {
   const res = await apiFetch<ShipmentSingleResponse>(`/api/shipments/${id}/status`, {
