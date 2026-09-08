@@ -17,7 +17,12 @@ Each row mentions exactly **one single feature** without combining multiple func
 ## Phase 1: Core Platform (v1 - MVP)
 This phase covers the essential customer, driver, and administrator workflows required to book, transport, and track cargo end-to-end (RFP 4.2, 4.3). It establishes the core iOS/Android apps, scalable backend APIs, and the primary admin web panel (RFP 4.3).
 
-### 1. User Application Features (اپلیکیشن کاربری)
+> **⚠️ OPERATOR MODEL CORRECTION (2026-09-08):** The three mobile user models for the MVP are:
+> 1. **صاحبان کالا / Cargo Owners (کاربر معمولی)** — the generic "user" IS the cargo owner; these roles are merged.
+> 2. **رانندگان / Drivers**
+> 3. **شرکت حمل و نقل / Transport Companies** — promoted from Phase 2 §2 into the MVP. A minimal corporate registration + fleet-view slice ships in Phase 1; the full corporate feature set (staff management, load allocation, reporting) remains in Phase 2.
+
+### 1. User Application Features (اپلیکیشن کاربری — صاحبان کالا)
 *   **User registration**: Allows new users to register on the platform [14].
 *   **User login**: Provides secure sign-in functionality for registered users [14].
 *   **User information management**: Allows users to manage their administrative and contact details [14].
@@ -120,6 +125,7 @@ This phase covers the essential customer, driver, and administrator workflows re
 *   **Android Mobile Application Surface**: Delivers native or cross-platform Android mobile client application [21].
 *   **Web Administration Panel Surface**: Delivers responsive web application for system administrators [22].
 *   **Independent and Scalable Backend API Service**: Delivers independent backend API service layer [22].
+*   **MVP Transport Company Slice (شرکت حمل و نقل — MVP slice)**: Minimal corporate surface shipped in Phase 1 per operator correction: `transport_company` role in `User.ROLES`, mobile company mode (role choice + tabs + placeholder company dashboard with fleet overview), so corporate users onboard from day one. Full corporate features stay in Phase 2 §2.
 
 ---
 
@@ -132,7 +138,10 @@ This phase introduces multi-tier corporate shipping workflows (RFP 4.2.4), real-
 *   **Interactive map tracking**: Displays live coordinate-based movement inside the Web Admin Panel [18].
 
 ### 2. Transportation Companies Section (بخش شرکت‌های حمل‌ونقل)
-*   **Shipping company registration**: Allows corporate logistics companies to register profiles [17].
+
+> **Note (2026-09-08):** Per operator correction, the **role itself and a minimal corporate slice** (registration, company mode, fleet overview placeholder) were promoted into **Phase 1 MVP** — see Phase 1 §8. The full corporate feature set below remains Phase 2.
+
+*   **Shipping company registration**: Allows corporate logistics companies to register profiles [17]. *(MVP slice in Phase 1)*
 *   **Shipping company data management**: Allows editing and updating corporate credentials [17].
 *   **Corporate staff management**: Allows company admins to register and manage company personnel [17].
 *   **Corporate operator management**: Allows assigning custom roles to internal company employees [17].
