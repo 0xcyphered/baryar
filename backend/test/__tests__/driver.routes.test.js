@@ -5,13 +5,12 @@ const path = require('path');
 const { createApp } = require('../../src/app');
 const User = require('../../src/models/User');
 const Document = require('../../src/models/Document');
+const { applyTestEnv, makeHelpers, canon, FIXED_CODE } = require('../helpers');
 
 const PHONE_DRIVER = '09121230011';   // registers via POST /profile (role granted there)
 const PHONE_DRIVER2 = '09121230012';  // second driver — ownership + plate-conflict tests
 const PHONE_ROLE_ONLY = '09121230013'; // pre-seeded roles: ['driver'], no profile
 const PHONE_CIVILIAN = '09121230014'; // plain cargo_owner via the OTP loop
-const canon = (phone) => `+98${phone.slice(1)}`;
-const FIXED_CODE = '123456';
 // Plan 030: 1×1 PNG (68 bytes) for multipart upload tests.
 const PNG_1X1 = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -20,11 +19,10 @@ const PNG_1X1 = Buffer.from(
 
 describe('driver onboarding', () => {
   const app = createApp();
+  const h = makeHelpers(app);
 
   beforeAll(() => {
-    process.env.JWT_SECRET = 'test-secret-do-not-use';
-    process.env.OTP_FIXED_CODE = FIXED_CODE;
-    process.env.NODE_ENV = 'test';
+    applyTestEnv();
     process.env.UPLOAD_DIR = path.join(__dirname, `../tmp-uploads-${process.pid}`);
   });
 
@@ -32,26 +30,9 @@ describe('driver onboarding', () => {
     fs.rmSync(process.env.UPLOAD_DIR, { recursive: true, force: true });
   });
 
-  async function register(phone) {
-    await request(app).post('/api/auth/request-otp').send({ phone });
-    const res = await request(app).post('/api/auth/verify-otp').send({ phone, code: FIXED_CODE });
-    expect(res.status).toBe(200);
-    return { token: res.body.token, userId: res.body.user.id };
-  }
-
   async function registerRoleOnly(phone) {
     await User.create({ phone: canon(phone), roles: ['driver'] });
-    const { token } = await register(phone);
-    return token;
-  }
-
-  async function registerDriverViaProfile(phone, profileOverrides = {}) {
-    const { token } = await register(phone);
-    const res = await request(app)
-      .post('/api/driver/profile')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ licenseNumber: 'L-123456', professionalCardNumber: 'PC-998877', ...profileOverrides });
-    expect([200, 201]).toContain(res.status);
+    const { token } = await h.register(phone);
     return token;
   }
 
@@ -74,7 +55,7 @@ describe('driver onboarding', () => {
   }
 
   test('1. POST /api/driver/profile registers a fresh user: 201, pending, driver role granted', async () => {
-    const { token, userId } = await register(PHONE_CIVILIAN);
+    const { token, userId } = await h.register(PHONE_CIVILIAN);
     const res = await request(app)
       .post('/api/driver/profile')
       .set('Authorization', `Bearer ${token}`)
@@ -90,7 +71,7 @@ describe('driver onboarding', () => {
   });
 
   test('2. second POST /profile updates (200) and keeps exactly one profile, still pending', async () => {
-    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const { token } = await h.registerDriverViaProfile(PHONE_DRIVER);
     const res = await request(app)
       .post('/api/driver/profile')
       .set('Authorization', `Bearer ${token}`)
@@ -110,22 +91,21 @@ describe('driver onboarding', () => {
     expect(noProfile.status).toBe(404);
     expect(noProfile.body).toEqual({ error: 'not_found' });
 
-    const { token } = await register(PHONE_CIVILIAN);
+    const { token } = await h.register(PHONE_CIVILIAN);
     const civilian = await request(app).get('/api/driver/profile').set('Authorization', `Bearer ${token}`);
     expect(civilian.status).toBe(403);
     expect(civilian.body).toEqual({ error: 'forbidden' });
   });
 
   test('4. GET /vehicles as a non-driver is forbidden', async () => {
-    const { token } = await register(PHONE_CIVILIAN);
+    const { token } = await h.register(PHONE_CIVILIAN);
     const res = await request(app).get('/api/driver/vehicles').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(403);
     expect(res.body).toEqual({ error: 'forbidden' });
   });
 
   test('5. POST /vehicles creates an active truck owned by the token user', async () => {
-    const token = await registerDriverViaProfile(PHONE_DRIVER);
-    const { userId } = await register(PHONE_DRIVER); // same user; gets id
+    const { token, userId } = await h.registerDriverViaProfile(PHONE_DRIVER);
     const res = await createVehicle(token);
     expect(res.status).toBe(201);
     expect(res.body.vehicle.status).toBe('active');
@@ -136,7 +116,7 @@ describe('driver onboarding', () => {
   });
 
   test('6. POST /vehicles ignores a smuggled status — always active on create', async () => {
-    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const { token } = await h.registerDriverViaProfile(PHONE_DRIVER);
     const res = await createVehicle(token, { status: 'inactive', ownerUserId: 'f'.repeat(24) });
     expect(res.status).toBe(201);
     expect(res.body.vehicle.status).toBe('active');
@@ -144,8 +124,8 @@ describe('driver onboarding', () => {
   });
 
   test('7. duplicate plate — even by another driver — is 409 plate_in_use', async () => {
-    const first = await registerDriverViaProfile(PHONE_DRIVER);
-    const second = await registerDriverViaProfile(PHONE_DRIVER2);
+    const { token: first } = await h.registerDriverViaProfile(PHONE_DRIVER);
+    const { token: second } = await h.registerDriverViaProfile(PHONE_DRIVER2);
     const original = await createVehicle(first);
     expect(original.status).toBe(201);
 
@@ -159,7 +139,7 @@ describe('driver onboarding', () => {
   });
 
   test('8. POST /vehicles rejects bad vehicleType and missing plate', async () => {
-    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const { token } = await h.registerDriverViaProfile(PHONE_DRIVER);
     const badType = await createVehicle(token, { vehicleType: 'rocket' });
     expect(badType.status).toBe(400);
     expect(badType.body).toEqual({ error: 'validation_error' });
@@ -175,8 +155,8 @@ describe('driver onboarding', () => {
   });
 
   test('9. GET /vehicles lists only own vehicles, newest first, with count', async () => {
-    const token = await registerDriverViaProfile(PHONE_DRIVER);
-    const other = await registerDriverViaProfile(PHONE_DRIVER2);
+    const { token } = await h.registerDriverViaProfile(PHONE_DRIVER);
+    const { token: other } = await h.registerDriverViaProfile(PHONE_DRIVER2);
     const a = await createVehicle(token, { plate: '11A111IR11' });
     await new Promise((resolve) => setTimeout(resolve, 5)); // distinct createdAt
     const b = await createVehicle(token, { plate: '22B222IR22' });
@@ -193,8 +173,8 @@ describe('driver onboarding', () => {
   });
 
   test('10. PATCH own vehicle updates editable fields; plate is not editable; foreign and malformed ids', async () => {
-    const driver = await registerDriverViaProfile(PHONE_DRIVER);
-    const other = await registerDriverViaProfile(PHONE_DRIVER2);
+    const { token: driver } = await h.registerDriverViaProfile(PHONE_DRIVER);
+    const { token: other } = await h.registerDriverViaProfile(PHONE_DRIVER2);
     const created = await createVehicle(driver);
     const id = created.body.vehicle.id;
 
@@ -224,7 +204,7 @@ describe('driver onboarding', () => {
   });
 
   test('11. DELETE own vehicle removes it; subsequent GET shows it gone', async () => {
-    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const { token } = await h.registerDriverViaProfile(PHONE_DRIVER);
     const created = await createVehicle(token);
     const id = created.body.vehicle.id;
 
@@ -237,8 +217,7 @@ describe('driver onboarding', () => {
   });
 
   test('12. POST /documents creates a pending stub; verification fields cannot be smuggled', async () => {
-    const token = await registerDriverViaProfile(PHONE_DRIVER);
-    const { userId } = await register(PHONE_DRIVER);
+    const { token, userId } = await h.registerDriverViaProfile(PHONE_DRIVER);
     const res = await request(app)
       .post('/api/driver/documents')
       .set('Authorization', `Bearer ${token}`)
@@ -258,8 +237,8 @@ describe('driver onboarding', () => {
   });
 
   test('13. POST /documents with a foreign vehicleId is 404; malformed vehicleId is 400', async () => {
-    const driver = await registerDriverViaProfile(PHONE_DRIVER);
-    const other = await registerDriverViaProfile(PHONE_DRIVER2);
+    const { token: driver } = await h.registerDriverViaProfile(PHONE_DRIVER);
+    const { token: other } = await h.registerDriverViaProfile(PHONE_DRIVER2);
     const foreignVehicle = await createVehicle(other, { plate: '44D444IR44' });
 
     const foreign = await request(app)
@@ -278,7 +257,7 @@ describe('driver onboarding', () => {
   });
 
   test('14. POST /documents rejects bad kind and missing kind', async () => {
-    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const { token } = await h.registerDriverViaProfile(PHONE_DRIVER);
     const badKind = await request(app)
       .post('/api/driver/documents')
       .set('Authorization', `Bearer ${token}`)
@@ -295,8 +274,8 @@ describe('driver onboarding', () => {
   });
 
   test('15. GET /documents lists own only; ?kind= filters; bogus kind is 400', async () => {
-    const token = await registerDriverViaProfile(PHONE_DRIVER);
-    const other = await registerDriverViaProfile(PHONE_DRIVER2);
+    const { token } = await h.registerDriverViaProfile(PHONE_DRIVER);
+    const { token: other } = await h.registerDriverViaProfile(PHONE_DRIVER2);
     await request(app).post('/api/driver/documents').set('Authorization', `Bearer ${token}`)
       .send({ kind: 'driving_license' });
     const reg = await request(app).post('/api/driver/documents').set('Authorization', `Bearer ${token}`)
@@ -323,7 +302,7 @@ describe('driver onboarding', () => {
   });
 
   test('16. DELETE own pending document is ok; a non-pending document is document_locked', async () => {
-    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const { token } = await h.registerDriverViaProfile(PHONE_DRIVER);
     const pending = await request(app)
       .post('/api/driver/documents')
       .set('Authorization', `Bearer ${token}`)
@@ -374,7 +353,7 @@ describe('driver onboarding', () => {
   }
 
   test('19. POST /documents/upload stores bytes, returns server-generated storageKey', async () => {
-    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const { token } = await h.registerDriverViaProfile(PHONE_DRIVER);
     const res = await uploadDoc(token, 'card.png');
     expect(res.status).toBe(201);
     expect(res.body.document.verificationStatus).toBe('pending');
@@ -389,14 +368,14 @@ describe('driver onboarding', () => {
   });
 
   test('20. POST /documents/upload without a file part is 400 validation_error', async () => {
-    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const { token } = await h.registerDriverViaProfile(PHONE_DRIVER);
     const res = await uploadDoc(token, null);
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: 'validation_error' });
   });
 
   test('21. POST /documents/upload with a disallowed mime is 400 invalid_file_type', async () => {
-    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const { token } = await h.registerDriverViaProfile(PHONE_DRIVER);
     const res = await request(app)
       .post('/api/driver/documents/upload')
       .set('Authorization', `Bearer ${token}`)
@@ -407,7 +386,7 @@ describe('driver onboarding', () => {
   });
 
   test('22. JSON POST /documents discards a client-supplied storageKey', async () => {
-    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const { token } = await h.registerDriverViaProfile(PHONE_DRIVER);
     const res = await request(app)
       .post('/api/driver/documents')
       .set('Authorization', `Bearer ${token}`)
@@ -417,7 +396,7 @@ describe('driver onboarding', () => {
   });
 
   test('23. owner GET /documents/:id/file streams the uploaded bytes back', async () => {
-    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const { token } = await h.registerDriverViaProfile(PHONE_DRIVER);
     const up = await uploadDoc(token, 'card.png');
     const id = up.body.document.id;
 
@@ -431,8 +410,8 @@ describe('driver onboarding', () => {
   });
 
   test('24. another driver GET on that file is 404 not_found (existence not leaked)', async () => {
-    const owner = await registerDriverViaProfile(PHONE_DRIVER);
-    const other = await registerDriverViaProfile(PHONE_DRIVER2);
+    const { token: owner } = await h.registerDriverViaProfile(PHONE_DRIVER);
+    const { token: other } = await h.registerDriverViaProfile(PHONE_DRIVER2);
     const up = await uploadDoc(owner, 'card.png');
 
     const res = await request(app)
@@ -443,7 +422,7 @@ describe('driver onboarding', () => {
   });
 
   test('25. GET .../file on a JSON stub (empty storageKey) is 404', async () => {
-    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const { token } = await h.registerDriverViaProfile(PHONE_DRIVER);
     const stub = await request(app)
       .post('/api/driver/documents')
       .set('Authorization', `Bearer ${token}`)
@@ -456,7 +435,7 @@ describe('driver onboarding', () => {
   });
 
   test('26. DELETE of an uploaded pending doc removes the file from disk', async () => {
-    const token = await registerDriverViaProfile(PHONE_DRIVER);
+    const { token } = await h.registerDriverViaProfile(PHONE_DRIVER);
     const up = await uploadDoc(token, 'card.png');
     const storageKey = up.body.document.storageKey;
     const abs = require('../../src/services/storageService').assertSafeKey(storageKey);

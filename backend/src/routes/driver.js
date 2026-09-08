@@ -121,7 +121,14 @@ router.post('/documents', async (req, res) => {
   }
 });
 
-router.post('/documents/upload', upload.single('file'), async (req, res) => {
+function handleUpload(req, res, next) {
+  upload.single('file')(req, res, (err) => {
+    if (err) return sendDriverError(res, err);
+    return next();
+  });
+}
+
+router.post('/documents/upload', handleUpload, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'validation_error' });
     const document = await driverService.createDocumentFromUpload({

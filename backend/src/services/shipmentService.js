@@ -4,6 +4,7 @@ const ShipmentEvent = require("../models/ShipmentEvent");
 const notificationService = require("./notificationService");
 const { fail } = require("../utils/httpError");
 const { assertId } = require("../utils/objectId");
+const { pickFields } = require("../utils/pickFields");
 
 const MAX_LIST = 100;
 // eventType on custom events is driver-chosen; 'status_change' events are
@@ -30,13 +31,7 @@ const TRANSITIONS = {
 };
 
 function pickEventFields(body) {
-  const out = {};
-  for (const key of EVENT_FIELDS) {
-    if (Object.prototype.hasOwnProperty.call(body || {}, key)) {
-      out[key] = body[key];
-    }
-  }
-  return out;
+  return pickFields(body, EVENT_FIELDS);
 }
 
 // Award hook (plan 018): called from matchingService.acceptOffer after the

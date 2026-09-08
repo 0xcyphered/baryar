@@ -3,6 +3,7 @@ const rateLimit = require('express-rate-limit');
 const { requestOtp, verifyOtp } = require('../services/otpService');
 const { publicUser, updateMe } = require('../services/userService');
 const { auth } = require('../middleware/auth');
+const { sendError } = require('../utils/httpError');
 
 const router = express.Router();
 
@@ -21,21 +22,19 @@ const authLimiter = rateLimit({
   },
 });
 
+const AUTH_ERRORS = {
+  invalid_phone: 400,
+  otp_cooldown: 429,
+  otp_invalid: 401,
+  otp_locked: 429,
+  account_blocked: 403,
+  server_misconfigured: 500,
+  unauthorized: 401,
+  validation_error: 400,
+};
+
 function sendAuthError(res, err) {
-  const code = err && err.code;
-  const map = {
-    invalid_phone: 400,
-    otp_cooldown: 429,
-    otp_invalid: 401,
-    otp_locked: 429,
-    account_blocked: 403,
-    server_misconfigured: 500,
-    unauthorized: 401,
-    validation_error: 400,
-  };
-  const status = map[code] || 500;
-  const error = map[code] ? code : 'server_error';
-  return res.status(status).json({ error });
+  return sendError(res, err, AUTH_ERRORS);
 }
 
 router.post('/request-otp', authLimiter, async (req, res) => {
