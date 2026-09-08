@@ -12,7 +12,7 @@ const USER_KEY = 'auth_user';
 const USER_KEY_EXP = 'auth_user_exp';
 const ROLE_KEY = 'active_role';
 
-const VALID_ROLES: readonly AppRole[] = ['user', 'cargo_owner', 'driver'];
+const VALID_ROLES: readonly AppRole[] = ['cargo_owner', 'driver', 'transport_company'];
 
 interface AuthState {
   user: UserProfile | null;

@@ -10,13 +10,6 @@ export const ROLE_META: Record<
   AppRole,
   { label: string; tagline: string; icon: string; color: string; tint: string }
 > = {
-  user: {
-    label: 'کاربر',
-    tagline: 'ارسال درخواست حمل و پیگیری مرسولات',
-    icon: 'person-outline',
-    color: COLORS.blue,
-    tint: 'rgba(59, 130, 246, 0.12)',
-  },
   cargo_owner: {
     label: 'صاحب کالا',
     tagline: 'ثبت بار، دریافت پیشنهاد و انتخاب شرکت حمل',
@@ -31,14 +24,21 @@ export const ROLE_META: Record<
     color: COLORS.red,
     tint: 'rgba(239, 68, 68, 0.12)',
   },
+  transport_company: {
+    label: 'شرکت حمل و نقل',
+    tagline: 'مدیریت ناوگان حمل و نقل و ارسال بار',
+    icon: 'briefcase-outline',
+    color: COLORS.amber,
+    tint: 'rgba(245, 158, 11, 0.12)',
+  },
 };
 
-export const APP_ROLE_ORDER: readonly AppRole[] = ['user', 'cargo_owner', 'driver'];
+export const APP_ROLE_ORDER: readonly AppRole[] = ['cargo_owner', 'driver', 'transport_company'];
 
 export const ACTIVE_ROLE_LABEL: Record<AppRole, string> = {
-  user: 'حالت کاربر',
   cargo_owner: 'حالت صاحب کالا',
   driver: 'حالت رانندگی',
+  transport_company: 'حالت شرکت حمل و نقل',
 };
 
 // ─── Cargo status ────────────────────────────────────────────────

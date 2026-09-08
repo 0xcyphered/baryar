@@ -120,9 +120,9 @@ export type RootStackParamList = {
 // defined in this file (moving it to navigation/types.ts would create an
 // import cycle — that file re-exports from here).
 export const ROLE_TABS: Record<AppRole, readonly (keyof MainTabParamList)[]> = {
-  user: ['MapTab', 'ShipmentsTab', 'NotificationsTab'],
   cargo_owner: ['MapTab', 'CargoTab', 'ShipmentsTab', 'NotificationsTab'],
   driver: ['MapTab', 'DriverTab', 'ShipmentsTab', 'NotificationsTab'],
+  transport_company: ['MapTab', 'CargoTab', 'ShipmentsTab', 'NotificationsTab'],
 };
 
 // --- Nested stack screens ---
