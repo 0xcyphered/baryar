@@ -283,6 +283,10 @@ describe('admin routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.user.id).toBe(drvId);
     expect(res.body.profile).toBeTruthy();
+    expect(res.body.profile.id).toBeDefined();
+    expect(res.body.profile.userId).toBe(drvId);
+    expect(res.body.profile._id).toBeUndefined();
+    expect(res.body.profile.__v).toBeUndefined();
     expect(res.body.vehicles).toBeInstanceOf(Array);
     expect(res.body.documents).toBeInstanceOf(Array);
   });
@@ -307,6 +311,9 @@ describe('admin routes', () => {
       .set('Authorization', `Bearer ${admTok}`)
       .send({ decision: 'approved' });
     expect(res.status).toBe(200);
+    expect(res.body.profile.id).toBeDefined();
+    expect(res.body.profile._id).toBeUndefined();
+    expect(res.body.profile.__v).toBeUndefined();
     expect(res.body.profile.verificationStatus).toBe('approved');
     expect(res.body.profile.verifiedAt).toBeTruthy();
   });
@@ -320,6 +327,8 @@ describe('admin routes', () => {
       .set('Authorization', `Bearer ${admTok}`)
       .send({ decision: 'rejected', reason: 'Documents are unclear' });
     expect(res.status).toBe(200);
+    expect(res.body.profile.id).toBeDefined();
+    expect(res.body.profile._id).toBeUndefined();
     expect(res.body.profile.verificationStatus).toBe('rejected');
     expect(res.body.profile.rejectionReason).toBe('Documents are unclear');
   });
@@ -385,8 +394,9 @@ describe('admin routes', () => {
       .get(`/api/admin/cargo/${cargoId}`)
       .set('Authorization', `Bearer ${admTok}`);
     expect(res.status).toBe(200);
-    // admin returns raw Mongoose doc (has _id, not id)
-    expect(res.body.cargo._id.toString()).toBe(cargoId);
+    expect(res.body.cargo.id).toBe(cargoId);
+    expect(res.body.cargo._id).toBeUndefined();
+    expect(res.body.cargo.__v).toBeUndefined();
     expect(res.body.cargo.title).toBe('Get By ID');
   });
 
@@ -410,6 +420,8 @@ describe('admin routes', () => {
       .set('Authorization', `Bearer ${admTok}`)
       .send({ title: 'Admin Updated Cargo' });
     expect(res.status).toBe(200);
+    expect(res.body.cargo.id).toBe(cargoId);
+    expect(res.body.cargo._id).toBeUndefined();
     expect(res.body.cargo.title).toBe('Admin Updated Cargo');
   });
 
@@ -423,6 +435,8 @@ describe('admin routes', () => {
       .post(`/api/admin/cargo/${cargoId}/cancel`)
       .set('Authorization', `Bearer ${admTok}`);
     expect(res.status).toBe(200);
+    expect(res.body.cargo.id).toBe(cargoId);
+    expect(res.body.cargo._id).toBeUndefined();
     expect(res.body.cargo.status).toBe('cancelled');
   });
 
@@ -452,6 +466,8 @@ describe('admin routes', () => {
       .post(`/api/admin/cargo/${cargoId}/cancel`)
       .set('Authorization', `Bearer ${admTok}`);
     expect(res.status).toBe(200);
+    expect(res.body.cargo.id).toBe(cargoId);
+    expect(res.body.cargo._id).toBeUndefined();
     expect(res.body.cargo.status).toBe('cancelled');
 
     const list = await request(app)
@@ -512,6 +528,9 @@ describe('admin routes', () => {
       .set('Authorization', `Bearer ${admTok}`)
       .send({ decision: 'approved' });
     expect(res.status).toBe(200);
+    expect(res.body.document.id).toBe(docId);
+    expect(res.body.document._id).toBeUndefined();
+    expect(res.body.document.__v).toBeUndefined();
     expect(res.body.document.verificationStatus).toBe('approved');
     expect(res.body.document.reviewedAt).toBeTruthy();
   });
@@ -530,6 +549,8 @@ describe('admin routes', () => {
       .set('Authorization', `Bearer ${admTok}`)
       .send({ decision: 'rejected', reason: 'Image is blurry' });
     expect(res.status).toBe(200);
+    expect(res.body.document.id).toBe(docId);
+    expect(res.body.document._id).toBeUndefined();
     expect(res.body.document.verificationStatus).toBe('rejected');
     expect(res.body.document.rejectionReason).toBe('Image is blurry');
   });

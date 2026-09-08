@@ -110,9 +110,9 @@ async function getDriverDetail({ userId }) {
   const documents = await Document.find({ userId }).sort({ createdAt: -1 }).limit(MAX_LIST);
   return {
     user: publicAdminUser(user),
-    profile,
-    vehicles,
-    documents,
+    profile: profile ? driverService.publicProfile(profile) : null,
+    vehicles: vehicles.map(driverService.publicVehicle),
+    documents: documents.map(driverService.publicDocument),
   };
 }
 

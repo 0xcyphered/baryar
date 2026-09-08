@@ -2,6 +2,8 @@ const express = require('express');
 const { auth } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/adminGuard');
 const adminService = require('../services/adminService');
+const cargoService = require('../services/cargoService');
+const driverService = require('../services/driverService');
 const settingsService = require('../services/settingsService');
 const { sendError } = require('../utils/httpError');
 
@@ -109,7 +111,7 @@ router.post('/drivers/:userId/verify', async (req, res) => {
       decision: req.body.decision,
       reason: req.body.reason,
     });
-    return res.status(200).json({ profile });
+    return res.status(200).json({ profile: driverService.publicProfile(profile) });
   } catch (err) {
     return sendAdminError(res, err);
   }
@@ -132,7 +134,7 @@ router.get('/cargo', async (req, res) => {
 router.get('/cargo/:id', async (req, res) => {
   try {
     const cargo = await adminService.getCargoAdmin({ id: req.params.id });
-    return res.status(200).json({ cargo });
+    return res.status(200).json({ cargo: cargoService.publicCargo(cargo) });
   } catch (err) {
     return sendAdminError(res, err);
   }
@@ -141,7 +143,7 @@ router.get('/cargo/:id', async (req, res) => {
 router.patch('/cargo/:id', async (req, res) => {
   try {
     const cargo = await adminService.updateCargoAdmin({ id: req.params.id, body: req.body });
-    return res.status(200).json({ cargo });
+    return res.status(200).json({ cargo: cargoService.publicCargo(cargo) });
   } catch (err) {
     return sendAdminError(res, err);
   }
@@ -150,7 +152,7 @@ router.patch('/cargo/:id', async (req, res) => {
 router.post('/cargo/:id/cancel', async (req, res) => {
   try {
     const cargo = await adminService.cancelCargoAdmin({ id: req.params.id });
-    return res.status(200).json({ cargo });
+    return res.status(200).json({ cargo: cargoService.publicCargo(cargo) });
   } catch (err) {
     return sendAdminError(res, err);
   }
@@ -202,7 +204,7 @@ router.post('/documents/:id/verify', async (req, res) => {
       reason: req.body.reason,
       reviewerUserId: req.user._id,
     });
-    return res.status(200).json({ document });
+    return res.status(200).json({ document: driverService.publicDocument(document) });
   } catch (err) {
     return sendAdminError(res, err);
   }
