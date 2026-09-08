@@ -63,7 +63,7 @@ export default function CargoListScreen() {
   }, [loadCargoes]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 12 }]}>
+    <View style={[styles.container, { paddingTop: insets.top + space[3] }]}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>بارهای من</Text>
@@ -116,7 +116,7 @@ export default function CargoListScreen() {
       ) : null}
 
       {loading && !refreshing ? (
-        <ActivityIndicator size="large" color={COLORS.blue} style={{ marginTop: 40 }} />
+        <ActivityIndicator size="large" color={COLORS.blue} style={{ marginTop: space[10] }} />
       ) : (
         <FlatList
           data={cargoes}
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
   fab: {
     width: 42,
     height: 42,
-    borderRadius: 21,
+    borderRadius: radii.full,
     backgroundColor: COLORS.blue,
     alignItems: 'center',
     justifyContent: 'center',
@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 6,
     paddingHorizontal: 14,
-    borderRadius: 20,
+    borderRadius: radii.xl,
     backgroundColor: COLORS.white,
     borderWidth: 1.5,
     borderColor: COLORS.border,
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
     marginBottom: space[2],
     backgroundColor: COLORS.redTint,
     borderRadius: radii.md,
-    padding: 10,
+    padding: space[2],
   },
   errorText: {
     color: COLORS.red,
